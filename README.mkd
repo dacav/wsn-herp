@@ -1,0 +1,29 @@
+HERP - HERP Extremely Reactive Protocol
+==================================
+
+This is my last university project (if you exclude the thesis). The
+project aims at satisfying the requirement:
+
+    Design and implement a unicast routing protocol that is
+    reactive, i.e., a route to destination is established only on
+    demand.
+
+    Hint:
+    -----
+
+    when a route is needed flood the network and build the route
+    using the reverse path from the destination to the source
+
+    Optional features:
+    ------------------
+
+    buffer previously used routes (validation mechanism needed)
+    compute a backup route to use in case of failure of the main
+    one
+
+    Means of verification:
+    ----------------------
+
+    to test your protocol set up a random topology and let each
+    node periodically send a message to all the other nodes
+
