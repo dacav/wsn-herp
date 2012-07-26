@@ -16,6 +16,7 @@ implementation {
     HerpC.RadioControl -> ActiveMessageC;
     HerpC.Timer -> Timer;
     HerpC.Packet -> AMSenderC;
+    HerpC.AMPacket -> AMSenderC;
 
 }
 
