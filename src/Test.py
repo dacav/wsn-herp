@@ -25,12 +25,14 @@ def load_noise (T, nodes_id):
 
 def main (argv=None):
 
+    NODE_COUNT = 1;
+
     T = Tossim([])
     T.addChannel('Out', sys.stdout)
 
     R = T.radio()
 
-    nodes_id = list( range(1, 4) )
+    nodes_id = list( range(NODE_COUNT) )
     load_noise(T, nodes_id)
     [R.add(x, y, -80) for x in nodes_id for y in nodes_id]
 

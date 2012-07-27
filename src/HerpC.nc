@@ -1,15 +1,18 @@
- #include "Timer.h"
- #include "AM.h"
+ #include <Timer.h>
+ #include <AM.h>
+ #include "TxOps.h"
 
 module HerpC
 {
-    uses interface Boot;
-    uses interface Receive;
-    uses interface AMSend as Send;
-    uses interface Timer<TMilli> as Timer;
-    uses interface SplitControl as RadioControl;
-    uses interface Packet;
-    uses interface AMPacket;
+    uses {
+        interface Boot;
+        interface Receive;
+        interface AMSend as Send;
+        interface Timer<TMilli> as Timer;
+        interface SplitControl as RadioControl;
+        interface Packet;
+        interface AMPacket;
+    }
 }
 
 implementation
