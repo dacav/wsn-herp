@@ -1,6 +1,6 @@
  #include "TxOps.h"
 
-interface TxOps<k,v> {
+interface TxOps<k_t,v_t> {
 
     /** Acquire a new Slot.
      *
@@ -12,7 +12,7 @@ interface TxOps<k,v> {
      * @retval NULL if there's no space left;
      * @retval The associated Slot otherwise.
      */
-    command slot_t acquire (k Key);
+    command slot_t acquire (k_t Key);
 
     /** Retrieve an existent Slot.
      *
@@ -24,7 +24,7 @@ interface TxOps<k,v> {
      * @retval NULL if there's no such a Slot;
      * @retval The associated Slot otherwise.
      */
-    command slot_t retrieve (k Key);
+    command slot_t retrieve (k_t Key);
 
     /** Access the Value stored in the Slot.
      *
@@ -32,7 +32,7 @@ interface TxOps<k,v> {
      *
      * @return The Value stored into the Slot.
      */
-    command v * access (slot_t Slot);
+    command v_t * access (slot_t Slot);
 
     /** Drop the ownership of the Slot.
      *
