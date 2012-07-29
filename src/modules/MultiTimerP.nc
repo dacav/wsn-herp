@@ -1,5 +1,6 @@
 
  #include "MultiTimer.h"
+ #include <assert.h>
 
 generic module MultiTimerP (typedef event_data_t) {
     provides {
@@ -24,20 +25,25 @@ implementation {
     command sched_item_t MultiTimer.schedule (uint32_t T,
                                               event_data_t *D) {
         sched_item_t fresh;
-        sched_item_t cursor, prev;
+        sched_item_t cursor, pr;
+        uint32_t now;
 
         fresh = call Pool.get();
         if (fresh == NULL) return NULL;
 
-        T += call BaseTimer.getNow();
-        cursor = sched;
-        prev = NULL;
+        now = call BaseTimer.getNow();
 
-        while (cursor != NULL && cursor->time < T) {
-            T -= cursor->time;
-            prev = cursor;
+        cursor = sched;
+        pr = NULL;
+
+        T += now;
+        while (cursor != NULL && cursor->time <= T) {
+            pr = cursor;
             cursor = cursor->next;
         }
+
+        fresh->time = T;
+        fresh->store = (void *) D;
 
         if (cursor == sched) {
             
@@ -48,52 +54,66 @@ implementation {
             sched = fresh;
 
             /* As head is changed, fix the timer for first event */
-            call BaseTimer.startOneShot(T);
+            call BaseTimer.startOneShot(T - now);
 
         } else {
 
             /* Insert in between */
             fresh->next = cursor;
             if (cursor) cursor->prev = fresh;
-            fresh->prev = prev;
-            prev->next = fresh;
+            fresh->prev = pr;
+            pr->next = fresh;
 
-        }
-
-        fresh->time = T;
-        fresh->store = (void *) D;
-
-        if ((cursor = fresh->next) != NULL) {
-            cursor->time -= T;
         }
 
         return fresh;
     }
 
-    command void nullify (sched_item_t E) {
+    command void MultiTimer.nullify (sched_item_t E) {
+        sched_item_t nx;
 
-        if (E->prev) E->prev->next = E->next;
-        if (E->next) E->next->prev = E->prev;
+        nx = E->next;
+        if (E == sched) {
+            if (next) {
+                nx->prev = NULL;
+                call BaseTimer.startOneShot(
+                    nx->time - call BaseTimer.getNow()
+                );
+            }
+            sched = nx;
+        } else {
+            E->prev->next = nx;
+            if (next) {
+                nx->prev = E->prev;
+            }
+        }
 
         call Pool.put(E);
     }
 
     event void BaseTimer.fired () {
-        sched_item_t e;
-        event_data_t *ed;
 
         assert(sched != NULL);
 
-        e = sched;
-        sched = sched->next;
-        if (sched) {
-            sched->prev = NULL;
-            call BaseTimer.startOneShot(sched->time);
-        }
+        do {
+            sched_item_t e;
+            event_data_t *ed;
 
-        ed = (event_data_t *) e->store;
-        call Pool.put(e);
-        signal MultiTimer.fired(ed);
+            e = sched;
+            sched = sched->next;
+            if (sched) {
+                uint32_t now = call BaseTimer.getNow();
+
+                sched->prev = NULL;
+                call BaseTimer.startOneShot(sched->time - now);
+            }
+
+            e->next = e->prev = NULL;
+            ed = (event_data_t *) e->store;
+            call Pool.put(e);
+
+            signal MultiTimer.fired(ed);
+        } while (sched && sched->time == 0);
     }
 
 }
