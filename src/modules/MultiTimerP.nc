@@ -74,7 +74,7 @@ implementation {
 
         nx = E->next;
         if (E == sched) {
-            if (next) {
+            if (nx) {
                 nx->prev = NULL;
                 call BaseTimer.startOneShot(
                     nx->time - call BaseTimer.getNow()
@@ -83,7 +83,7 @@ implementation {
             sched = nx;
         } else {
             E->prev->next = nx;
-            if (next) {
+            if (nx) {
                 nx->prev = E->prev;
             }
         }

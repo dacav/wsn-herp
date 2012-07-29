@@ -1,8 +1,8 @@
 
  #include "MultiTimer.h"
 
-generic configuration MultiTimer (typedef event_data_t,
-                                  uint16_t QUEUE_SIZE) {
+generic configuration MultiTimerC (typedef event_data_t,
+                                   uint16_t QUEUE_SIZE) {
     provides {
         interface MultiTimer<event_data_t>;
     }
