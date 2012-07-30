@@ -46,7 +46,7 @@ implementation {
         fresh->store = (void *) D;
 
         if (cursor == sched) {
-            
+
             /* Never moved. Insert in head (note: sched might be NULL) */
             fresh->next = sched;
             fresh->prev = NULL;
@@ -92,9 +92,39 @@ implementation {
     }
 
     event void BaseTimer.fired () {
+        uint32_t now;
 
         assert(sched != NULL);
 
+        now = sched->time;
+        do {
+            sched_item_t e;
+            event_data_t *ed;
+
+            e = sched;
+            sched = sched->next;
+
+            ed = (event_data_t *) e->store;
+            call Pool.put(e);
+
+            signal MultiTimer.fired(ed);
+
+        } while (sched && sched->time == now);
+
+        if (sched) {
+            sched->prev = NULL;
+            now = call BaseTimer.getNow();
+            call BaseTimer.startOneShot(sched->time - now);
+        }
+    }
+
+    /*
+    event void BaseTimer.fired () {
+        uint32_t now;
+
+        assert(sched != NULL);
+
+        now = call BaseTimer.getNow();
         do {
             sched_item_t e;
             event_data_t *ed;
@@ -102,8 +132,6 @@ implementation {
             e = sched;
             sched = sched->next;
             if (sched) {
-                uint32_t now = call BaseTimer.getNow();
-
                 sched->prev = NULL;
                 call BaseTimer.startOneShot(sched->time - now);
             }
@@ -113,7 +141,8 @@ implementation {
             call Pool.put(e);
 
             signal MultiTimer.fired(ed);
-        } while (sched && sched->time == 0);
+        } while (sched && sched->time == now);
     }
+    */
 
 }
