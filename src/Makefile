@@ -1,7 +1,9 @@
 .PHONY : foo
 
 CFLAGS += -I/usr/include/python2.6/
-CFLAGS += -Iheaders -Iinterfaces
+
+CFLAGS += $(addprefix -I, $(shell find interfaces -type d))
+CFLAGS += $(addprefix -I, $(shell find headers -type d))
 CFLAGS += $(addprefix -I, $(shell find modules -type d))
 
 LDFLAGS += -Lmodules
