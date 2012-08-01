@@ -10,6 +10,7 @@ generic module TxTableP (typedef entry_data_t, uint16_t N_BUCKETS) {
     uses {
         interface Pool<struct tx_entry> as EntryPool;
         interface Pool<entry_data_t> as DataPool;
+        interface InitItem<entry_data_t>;
     }
 }
 
@@ -32,6 +33,7 @@ implementation {
     command tx_entry_t TxTable.new_entry (am_addr_t Addr) {
         tx_entry_t c, fresh;
         tx_entry_t *head;
+        entry_data_t *user_data;
 
         if (call EntryPool.empty()) {
             return NULL;
@@ -50,9 +52,12 @@ implementation {
 
         fresh->node = Addr;
         fresh->tx_id = next_tx_id ++;
-        fresh->store = (void *) call DataPool.get();
-        fresh->next = *head;
 
+        user_data = call DataPool.get();
+        call InitItem.init(user_data);
+        fresh->store = (void *)user_data;
+
+        fresh->next = *head;
         *head = fresh;
 
         return fresh;
@@ -77,6 +82,7 @@ implementation {
 
     command void TxTable.free_entry (tx_entry_t E) {
         tx_entry_t *head;
+        entry_data_t *user_data;
 
         head = &buckets[E->node % N_BUCKETS];
         if (E == *head) {
@@ -92,7 +98,11 @@ implementation {
             }
             p->next = c->next;
         }
-        call DataPool.put((entry_data_t *)E->store);
+
+        user_data = (entry_data_t *)E->store;
+
+        call InitItem.free(user_data);
+        call DataPool.put(user_data);
         call EntryPool.put(E);
     }
 

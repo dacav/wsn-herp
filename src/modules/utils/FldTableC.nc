@@ -3,9 +3,8 @@
  #include <AM.h>
 
 generic configuration FldTableC (typedef entry_data_t, uint16_t MAX_SIZE) {
-    provides {
-        interface FldTable<entry_data_t>;
-    }
+    provides interface FldTable<entry_data_t>;
+    uses interface InitItem<entry_data_t>;
 }
 
 implementation {
@@ -17,5 +16,7 @@ implementation {
     MainC.SoftwareInit -> FldTableP;
     FldTableP.EntryPool -> EntryPool;
     FldTableP.DataPool -> DataPool;
+
+    FldTableP.InitItem = InitItem;
     FldTable = FldTableP;
 }

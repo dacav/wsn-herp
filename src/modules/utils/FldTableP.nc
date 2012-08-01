@@ -11,6 +11,7 @@ generic module FldTableP (typedef entry_data_t, uint16_t N_BUCKETS) {
     uses {
         interface Pool<struct fld_entry> as EntryPool;
         interface Pool<entry_data_t> as DataPool;
+        interface InitItem<entry_data_t>;
     }
 }
 
@@ -48,9 +49,15 @@ implementation {
 
         fresh = call EntryPool.get();
         if (fresh != NULL) {
+            entry_data_t *user_data;
+
             memcpy((void *)&fresh->key, (const void *)&K,
                    sizeof(fld_key_t));
-            fresh->store = (void *) call DataPool.get();
+
+            user_data = call DataPool.get();
+            call InitItem.init(user_data);
+            fresh->store = (void *) user_data;
+
             fresh->next = *head;
             *head = fresh;
         }
@@ -59,6 +66,7 @@ implementation {
 
     command void FldTable.free_entry (fld_entry_t E) {
         fld_entry_t *head;
+        entry_data_t *user_data;
 
         head = &buckets[E->key.from % N_BUCKETS];
         if (E == *head) {
@@ -74,7 +82,11 @@ implementation {
             }
             p->next = c->next;
         }
-        call DataPool.put((entry_data_t *)E->store);
+
+        user_data = (entry_data_t *)E->store;
+
+        call InitItem.free(user_data);
+        call DataPool.put(user_data);
         call EntryPool.put(E);
     }
 

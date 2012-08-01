@@ -3,9 +3,8 @@
  #include <AM.h>
 
 generic configuration TxTableC (typedef entry_data_t, uint16_t MAX_SIZE) {
-    provides {
-        interface TxTable<entry_data_t>;
-    }
+    provides interface TxTable<entry_data_t>;
+    uses interface InitItem<entry_data_t>;
 }
 
 implementation {
@@ -17,5 +16,7 @@ implementation {
     MainC.SoftwareInit -> TxTableP;
     TxTableP.EntryPool -> EntryPool;
     TxTableP.DataPool -> DataPool;
+
     TxTable = TxTableP;
+    TxTableP = InitItem;
 }
