@@ -11,7 +11,7 @@ interface TxTable<entry_data_t> {
      *
      * @param Addr The address of the target node.
      *
-     * @retval The Entry on success; 
+     * @retval The Entry on success;
      * @retval NULL on failure.
      */
     command tx_entry_t new_entry (am_addr_t Addr);

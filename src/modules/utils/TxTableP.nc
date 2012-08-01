@@ -34,7 +34,6 @@ implementation {
         tx_entry_t *head;
 
         if (call EntryPool.empty()) {
-            dbg("Out", "Full!!!!\n");
             return NULL;
         }
 

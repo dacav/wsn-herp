@@ -1,7 +1,7 @@
 #ifndef TX_TABLE_H
 #define TX_TABLE_H
 
- #include <AM.h>
+#include <AM.h>
 
 typedef struct tx_entry {
     am_addr_t node;
@@ -11,4 +11,3 @@ typedef struct tx_entry {
 } * tx_entry_t;
 
 #endif // TX_TABLE_H
-
