@@ -1,5 +1,3 @@
-.PHONY : foo
-
 CFLAGS += -I/usr/include/python2.6/
 
 CFLAGS += $(addprefix -I, $(shell find interfaces -type d))
