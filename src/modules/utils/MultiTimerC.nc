@@ -1,10 +1,11 @@
 
- #include "MultiTimer.h"
+ #include <MultiTimer.h>
+ #include
 
 generic configuration MultiTimerC (typedef event_data_t,
                                    uint16_t QUEUE_SIZE) {
     provides {
-        interface MultiTimer<event_data_t>;
+        interface MultiTimer[herp_opid_t]<event_data_t>;
     }
 }
 

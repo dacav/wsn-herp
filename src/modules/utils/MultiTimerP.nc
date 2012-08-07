@@ -1,10 +1,12 @@
 
- #include "MultiTimer.h"
+ #include <MultiTimer.h>
+ #include <Types.h>
+
  #include <assert.h>
 
 generic module MultiTimerP (typedef event_data_t) {
     provides {
-        interface MultiTimer<event_data_t>;
+        interface MultiTimer[herp_opid_t]<event_data_t>;
         interface Init;
     }
     uses {
@@ -22,8 +24,8 @@ implementation {
         return SUCCESS;
     }
 
-    command sched_item_t MultiTimer.schedule (uint32_t T,
-                                              event_data_t *D) {
+    command
+    sched_item_t MultiTimer.schedule[herp_opid_t opid] (uint32_t T, event_data_t *D) {
         sched_item_t fresh;
         sched_item_t cursor, pr;
         uint32_t now;
@@ -43,6 +45,7 @@ implementation {
         }
 
         fresh->time = T;
+        fresh->id = opid;
         fresh->store = (void *) D;
 
         if (cursor == sched) {
@@ -69,8 +72,10 @@ implementation {
         return fresh;
     }
 
-    command void MultiTimer.nullify (sched_item_t E) {
+    command void MultiTimer.nullify[herp_opid_t opid] (sched_item_t E) {
         sched_item_t nx;
+
+        assert(E->id == opid);
 
         nx = E->next;
         if (E == sched) {
@@ -107,7 +112,7 @@ implementation {
             ed = (event_data_t *) e->store;
             call Pool.put(e);
 
-            signal MultiTimer.fired(ed);
+            signal MultiTimer[ed->id].fired(ed);
 
         } while (sched && sched->time == now);
 
@@ -117,32 +122,5 @@ implementation {
             call BaseTimer.startOneShot(sched->time - now);
         }
     }
-
-    /*
-    event void BaseTimer.fired () {
-        uint32_t now;
-
-        assert(sched != NULL);
-
-        now = call BaseTimer.getNow();
-        do {
-            sched_item_t e;
-            event_data_t *ed;
-
-            e = sched;
-            sched = sched->next;
-            if (sched) {
-                sched->prev = NULL;
-                call BaseTimer.startOneShot(sched->time - now);
-            }
-
-            e->next = e->prev = NULL;
-            ed = (event_data_t *) e->store;
-            call Pool.put(e);
-
-            signal MultiTimer.fired(ed);
-        } while (sched && sched->time == now);
-    }
-    */
 
 }
