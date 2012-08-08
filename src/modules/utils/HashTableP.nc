@@ -13,17 +13,13 @@ generic module HashTableP (typedef key_t, typedef value_t, uint16_t NSLOTS) {
     provides {
         interface Init;
         interface HashTable<key_t, value_t>;
+        interface HashItemInit<value_t>;
     }
 
     uses {
-        interface HashCmp<uint16_t, key_t>;
-
-        interface Pool<struct hash_slot> SlotPool;
-        interface Pool<key_t> KeyPool;
-        interface Pool<value_t> ValuePool;
-
-        interface ParameterInit<value_t *> as ValueInit;
-        interface ParameterDispose<value_t *> as ValueDispose;
+        interface Pool<struct hash_slot> as SlotPool;
+        interface Pool<key_t> as KeyPool;
+        interface Pool<value_t> as ValuePool;
     }
 
 }
@@ -45,25 +41,22 @@ implementation {
 
     command hash_slot_t HashTable.get (const key_t *Key) {
         hash_slot_t *start;
-        hash_slot_t cur, prev, new_slot;
+        hash_slot_t cur, new_slot;
         key_t * new_key;
         value_t * new_value;
 
-        if (call SlotPool.empty()) {
-            return NULL;
-        }
-
-        found = FALSE;
         start = slot_of(Key);
-
         for (cur = *start; cur != NULL; cur = cur->next) {
-            if (call HashCmp.equal(Key, (const key_t *) cur->key)) {
+            if (signal HashTable.key_equal(Key, (const key_t *) cur->key)) {
                 return cur;
             }
         }
 
         new_value = call ValuePool.get();
-        if (call ValueInit.init(new_value) != SUCCESS) {
+        if (new_value == NULL) {
+            return NULL;
+        }
+        if (signal HashTable.value_init(new_value) != SUCCESS) {
             call ValuePool.put(new_value);
             return NULL;
         }
@@ -89,17 +82,17 @@ implementation {
         value_t *value;
         hash_slot_t *s;
 
-        s = slot_of((const key_t *) Slot->key)
-        if (Slot == s) {
-            *s = slot->next;
-            if (slot->next) slot->next->prev = NULL;
+        s = slot_of((const key_t *) Slot->key);
+        if (Slot == *s) {
+            *s = Slot->next;
+            if (Slot->next) Slot->next->prev = NULL;
         } else {
-            if (slot->prev) slot->prev->next = slot->next;
-            if (slot->next) slot->next->prev = slot->prev;
+            if (Slot->prev) Slot->prev->next = Slot->next;
+            if (Slot->next) Slot->next->prev = Slot->prev;
         }
 
         value = (value_t *) Slot->value;
-        call ValueDispose.dispose(value);
+        signal HashTable.value_dispose(value);
         call ValuePool.put(value);
 
         call KeyPool.put((key_t *)Slot->key);
@@ -107,12 +100,12 @@ implementation {
         call SlotPool.put(Slot);
     }
 
-    value_t * HashTable.item (const hash_slot_t Slot) {
+    command value_t * HashTable.item (const hash_slot_t Slot) {
         return (value_t *)Slot->value;
     }
 
     static hash_slot_t *slot_of (const key_t *Key) {
-        return &slots[call HashCmp.hash(Key) % NSLOTS];
+        return &slots[signal HashTable.key_hash(Key) % NSLOTS];
     }
 
 }
