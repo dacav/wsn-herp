@@ -1,6 +1,6 @@
 #ifndef HERP_TYPES_H
 #define HERP_TYPES_H
 
-typedef uint8_t herp_opid_t;
+typedef uint16_t herp_opid_t;
 
 #endif
