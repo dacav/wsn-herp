@@ -8,12 +8,11 @@ struct hash_slot {
     hash_slot_t prev, next;
 };
 
-generic module HashTableP (typedef key_t, typedef value_t, uint16_t NSLOTS) {
+generic module HashTableP (typedef key_t, typedef value_t, uint8_t NSLOTS) {
 
     provides {
         interface Init;
         interface HashTable<key_t, value_t>;
-        interface HashItemInit<value_t>;
     }
 
     uses {
@@ -39,7 +38,7 @@ implementation {
         return SUCCESS;
     }
 
-    command hash_slot_t HashTable.get (const key_t *Key) {
+    command hash_slot_t HashTable.get (const key_t *Key, bool MustExist) {
         hash_slot_t *start;
         hash_slot_t cur, new_slot;
         key_t * new_key;
@@ -51,6 +50,8 @@ implementation {
                 return cur;
             }
         }
+
+        if (MustExist) return NULL;
 
         new_value = call ValuePool.get();
         if (new_value == NULL) {
@@ -103,12 +104,13 @@ implementation {
         call SlotPool.put(Slot);
     }
 
-    command value_t * get_item (const key_t *Key) {
-        call HashTable.item( call HashTable.get(Key) );
+    command value_t * HashTable.get_item (const key_t *Key,
+                                          bool MustExist) {
+        return call HashTable.item( call HashTable.get(Key, MustExist) );
     }
 
-    command void get_del (const key_t *Key) {
-        call HashTable.del( call HashTable.get(Key) );
+    command void HashTable.get_del (const key_t *Key) {
+        call HashTable.del( call HashTable.get(Key, FALSE) );
     }
 
     command value_t * HashTable.item (const hash_slot_t Slot) {
