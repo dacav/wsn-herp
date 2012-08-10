@@ -3,13 +3,13 @@
 
 interface HashTable <key_type, value_type> {
 
-    command hash_slot_t get (const key_type *Key);
+    command hash_slot_t get (const key_type *Key, bool MustExist);
 
     command void del (hash_slot_t Slot);
 
     command value_type * item (const hash_slot_t Slot);
 
-    command value_type * get_item (const key_type *Key);
+    command value_type * get_item (const key_type *Key, bool MustExist);
 
     command void get_del (const key_type *Key);
 

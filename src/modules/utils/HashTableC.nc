@@ -1,7 +1,7 @@
 
  #include <HashTable.h>
 
-generic configuration HashTableC (typedef key, typedef value, uint16_t SIZE) {
+generic configuration HashTableC (typedef key, typedef value, uint8_t SIZE) {
 
     provides interface HashTable<key, value>;
 
