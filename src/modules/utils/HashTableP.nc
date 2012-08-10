@@ -56,7 +56,7 @@ implementation {
         if (new_value == NULL) {
             return NULL;
         }
-        if (signal HashTable.value_init(new_value) != SUCCESS) {
+        if (signal HashTable.value_init(Key, new_value) != SUCCESS) {
             call ValuePool.put(new_value);
             return NULL;
         }
@@ -80,7 +80,10 @@ implementation {
 
     command void HashTable.del (hash_slot_t Slot) {
         value_t *value;
+        key_t *key;
         hash_slot_t *s;
+
+        if (Slot == NULL) return;
 
         s = slot_of((const key_t *) Slot->key);
         if (Slot == *s) {
@@ -91,16 +94,25 @@ implementation {
             if (Slot->next) Slot->next->prev = Slot->prev;
         }
 
+        key = (key_t *) Slot->key;
         value = (value_t *) Slot->value;
-        signal HashTable.value_dispose(value);
+        signal HashTable.value_dispose(key, value);
+
+        call KeyPool.put(key);
         call ValuePool.put(value);
-
-        call KeyPool.put((key_t *)Slot->key);
-
         call SlotPool.put(Slot);
     }
 
+    command value_t * get_item (const key_t *Key) {
+        call HashTable.item( call HashTable.get(Key) );
+    }
+
+    command void get_del (const key_t *Key) {
+        call HashTable.del( call HashTable.get(Key) );
+    }
+
     command value_t * HashTable.item (const hash_slot_t Slot) {
+        if (Slot == NULL) return NULL;
         return (value_t *)Slot->value;
     }
 
