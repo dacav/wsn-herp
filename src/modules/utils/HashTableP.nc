@@ -38,6 +38,10 @@ implementation {
         return SUCCESS;
     }
 
+    command bool HashTable.full () {
+        return call SlotPool.empty();
+    }
+
     command hash_slot_t HashTable.get (const key_t *Key, bool MustExist) {
         hash_slot_t *start;
         hash_slot_t cur, new_slot;
