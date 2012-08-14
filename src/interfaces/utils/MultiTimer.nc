@@ -5,8 +5,8 @@ interface MultiTimer <event_data_t>
 {
     /** Schedule an Event
      *
-     * @param T The time at which the event must be fired;
-     * @param D The data (context) of the Event to be scheduled.
+     * @param[in] T The time at which the event must be fired;
+     * @param[in] D The data (context) of the Event to be scheduled.
      *
      * @note The returned Handler is a pointer, so it can be compared.
      *
@@ -17,7 +17,7 @@ interface MultiTimer <event_data_t>
 
     /** Nullify an Event.
      *
-     * @param E The Handler for the Event to be nullified.
+     * @param[in] E The Handler for the Event to be nullified.
      */
     command void nullify (sched_item_t E);
 
