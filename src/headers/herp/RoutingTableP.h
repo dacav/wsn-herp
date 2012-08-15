@@ -25,7 +25,7 @@ typedef struct subscr_item {
 } * subscr_item_t;
 
 typedef struct routes {
-    herp_rtentry entries[HERP_MAX_ROUTES];
+    struct herp_rtentry entries[HERP_MAX_ROUTES];
     subscr_item_t subscr;
 } * routes_t;
 

@@ -9,16 +9,9 @@ interface RoutingTable {
 
     command herp_rtres_t flag_working (herp_rtentry_t Entry);
 
-    /** Simply add a route
-     *
-     * @param Node
-     * @param Hop
-     *
-     * @retval
-     */
-	command herp_rtres_t add_route (am_addr_t Node, const herp_rthop_t *Hop);
+	command herp_rtres_t new_route (am_addr_t Node, const herp_rthop_t *Hop);
 
-	command herp_rtres_t refresh_route (herp_rtentry_t Entry, const herp_rthop_t *Hop);
+	command herp_rtres_t update_entry (herp_rtentry_t Entry, const herp_rthop_t *Hop);
 
     /** Drop a route, fetch another.
      *

@@ -7,12 +7,10 @@
 
 module RoutingTableP {
 
-    provide {
-        interface RoutingTable[herp_opid_t OpId] as RTab;
-    }
+    provides interface RoutingTable as RTab[herp_opid_t OpId];
 
-    use {
-        interface HashTable <am_addr_t, struct routes> Table;
+    uses {
+        interface HashTable <am_addr_t, struct routes> as Table;
         interface Queue<deliver_t> as Delivers;
         interface Pool<struct subscr_item> as SubscrPool;
 
@@ -23,6 +21,10 @@ module RoutingTableP {
 
 implementation {
 
+    static bool subscribe (herp_opid_t Id, routes_t Routes);
+    static bool enqueue (herp_opid_t Id, herp_rtentry_t Entry);
+    task void deliver_task ();
+
     event hash_index_t Table.key_hash (const am_addr_t *Key) {
         return *Key;
     }
@@ -31,21 +33,21 @@ implementation {
         return *Key1 == *Key2;
     }
 
-    event error_t Table.value_init (const am_addr_t *Key, routes_t *Val) {
+    event error_t Table.value_init (const am_addr_t *Key, routes_t Val) {
         int i;
 
         Val->subscr = NULL;
         for (i = 0; i < HERP_MAX_ROUTES; i ++) {
             memset((void *)Val, 0, sizeof(routes_t));
-            Val->routes[i].target = *Key;
-            Val->routes[i].sched = NULL;
-            Val->routes[i].state = DEAD;
+            Val->entries[i].target = *Key;
+            Val->entries[i].sched = NULL;
+            Val->entries[i].state = DEAD;
         }
 
         return SUCCESS;
     }
 
-    event void Entries.value_dispose (const am_addr_t *Key, herp_rtentry_t *Val) {
+    event void Table.value_dispose (const am_addr_t *Key, routes_t Val) {
         int i;
 
         while (Val->subscr) {
@@ -59,7 +61,7 @@ implementation {
 
         #if 0
         for (i = 0; i < HERP_MAX_ROUTES; i ++) {
-            herp_rtentry_t Entry = &(Val->routes[i]);
+            herp_rtentry_t Entry = &(Val->entries[i]);
 
             if (Entry->sched != NULL) {
                 call MultiTimer.nullify(Entry->sched);
@@ -70,51 +72,22 @@ implementation {
 
     }
 
-    static bool enqueue (herp_opid_t Id, herp_rtentry_t Entry) {
-        deliver_t D = {
-            .subscriber = Id,
-            .entry = Entry
-        };
-
-        if (call Delivers.enqueue(D) != SUCCESS) {
-            return FALSE;
-        }
-
-        if (call Delivers.size() == 1) {
-            /* The queue was empty, so there was no task. */
-            if ((post deliver_task()) == 0) {
-                call Delivers.dequeue();
-                return FALSE;
-            }
-        }
-
-        return TRUE;
-    }
-
-    static bool subscribe (herp_opid_t Id, herp_rtentry_t Routes) {
-        subscr_item_t ListItem;
-
-        ListItem = call SubscrPool.get();
-        if (ListItem == NULL) return FALSE;
-
-        ListItem->next = Routes->subscr;
-        Routes->subscr = ListItem;
-
-        return TRUE;
+	command herp_rtres_t RTab.new_route[herp_opid_t OpId] (am_addr_t Node, const herp_rthop_t *Hop) {
+        return HERP_RT_ERROR;   // TODO implement
     }
 
     command herp_rtres_t RTab.get_route[herp_opid_t OpId] (am_addr_t Node, herp_rtentry_t *Out) {
         routes_t Routes;
-        herp_rtentry_t Seasoned, Fresh, Building;
+        herp_rtentry_t Seasoned, Fresh, Building, Dead;
         int i;
 
-        *Out = NULL;
-
-        Routes = call Table.get_data(&Node, FALSE);
+        Routes = call Table.get_item(&Node, FALSE);
         if (Routes == NULL) return HERP_RT_ERROR;
 
+        Dead = NULL;
         Seasoned = NULL;
         Fresh = NULL;
+        Building = NULL;
 
         /* Scan the routes for the Target Node, collect useful records. */
         for (i = 0; i < HERP_MAX_ROUTES && Fresh == NULL; i ++) {
@@ -123,6 +96,7 @@ implementation {
             E = &(Routes->entries[i]);
             switch (E->state) {
                 case DEAD:
+                    if (Dead == NULL) Dead = E;
                     break;
                 case BUILDING:
                     if (Building == NULL) Building = E;
@@ -158,9 +132,15 @@ implementation {
             return HERP_RT_VERIFY;
         }
 
-        /* We have no record at all. Ask the caller to search for a
-         * route by using the Reach message. */
-        return HERP_RT_REACH;
+        if (Dead) {
+            /* We have no record at all. Ask the caller to search for a
+             * route by using the Reach message. */
+            *Out = Dead;
+            return HERP_RT_REACH;
+        }
+
+        // Hit only if HERP_MAX_ROUTES == 0, which is nonsense...
+        assert(0);
     }
 
     command const herp_rthop_t * RTab.get_hop[herp_opid_t OpId] (const herp_rtentry_t Entry) {
@@ -168,70 +148,68 @@ implementation {
     }
 
     command herp_rtres_t RTab.flag_working[herp_opid_t OpId] (herp_rtentry_t Entry) {
-
         switch (Entry->state) {
-            case DEAD:
-                return HERP_RT_ERROR;
+
             case FRESH:
             case BUILDING:
                 return HERP_RT_ALREADY;
+
             default:
-                break;
+                Entry->owner = OpId;
+
+                // TODO: set timeout, in order to avoid starving.
+                //
+                // call MultiTimer.nullify(Entry->sched)
+                // Entry->sched = call MultiTimer.something(...)
+
+                return HERP_RT_SUCCESS;
         }
-
-        Entry->owner = OpId;
-
-        // TODO: set timeout, in order to avoid starving.
-        //
-        // call MultiTimer.nullify(Entry->sched)
-        // Entry->sched = call MultiTimer.something(...)
-
-        return HERP_RT_SUCCESS;
-
     }
 
-	command herp_rtres_t RTab.refresh_route[herp_opid_t OpId] (herp_rtentry_t Entry, const herp_rthop_t *Hop) {
+	command herp_rtres_t RTab.update_entry[herp_opid_t OpId] (herp_rtentry_t Entry, const herp_rthop_t *Hop) {
 
-        if (Entry->state != SEASONED || Entry->owner != OpId) {
-            return HERP_RT_ERROR;
-        }
+        if (Entry->owner != OpId) return HERP_RT_ERROR;
 
         Entry->state = FRESH;
-        memcpy((void *)&Entry->hop, (const void *)Hop,
-                sizeof(herp_rthop_t));
+        Entry->hop.first_hop = Hop->first_hop;
+        Entry->hop.n_hops = Hop->n_hops;
 
         // TODO: reset timer
-        
+
         return enqueue(OpId, Entry) ? HERP_RT_SUBSCRIBED : HERP_RT_ERROR;
     }
 
     command herp_rtres_t RTab.drop_route[herp_opid_t OpId] (herp_rtentry_t *Entry) {
-        if (Entry->state != SEASONED || Entry->owner != OpId) {
+
+        herp_rtentry_t ToDrop = *Entry;
+
+        if (ToDrop->state != SEASONED || ToDrop->owner != OpId) {
             return HERP_RT_ERROR;
         }
-        Entry->state = DEAD;
-        return call RTab.get_route[OpId](Entry->target, Entry) {
+        ToDrop->state = DEAD;
+
+        return call RTab.get_route[OpId](ToDrop->target, Entry);
     }
 
     task void deliver_task () {
         deliver_t D;
-        herp_rthop_t Hop;
+        herp_rthop_t *Hop;
 
         if (call Delivers.empty()) return;
         D = call Delivers.dequeue();
 
         Hop = NULL;
         if (D.entry->state == FRESH) {
-            herp_rtentry_t Entry;
+            routes_t Routes;
 
             Hop = &(D.entry->hop);
 
-            Entry = call Entries.get_data(&D.entry->target, TRUE);
-            if (Entry && Entry->subscr) {
+            Routes = call Table.get_item(&D.entry->target, TRUE);
+            if (Routes && Routes->subscr) {
                 subscr_item_t Subscr;
 
-                Subscr = Entry->subscr;
-                Entry->subscr = Subscr->next;
+                Subscr = Routes->subscr;
+                Routes->subscr = Subscr->next;
                 enqueue(Subscr->id, D.entry);
                 call SubscrPool.put(Subscr);
             }
@@ -240,8 +218,43 @@ implementation {
 
         if (!call Delivers.empty()) post deliver_task();
 
-        call RTab.deliver[D.id](Hop ? HERP_RT_SUCCESS : HERP_RT_RETRY,
-                                D.entry->target, Hop);
+        signal RTab.deliver[D.subscriber](
+            Hop ? HERP_RT_SUCCESS : HERP_RT_RETRY,
+            D.entry->target, Hop
+        );
+    }
+
+    static bool enqueue (herp_opid_t Id, herp_rtentry_t Entry) {
+        deliver_t D = {
+            .subscriber = Id,
+            .entry = Entry
+        };
+
+        if (call Delivers.enqueue(D) != SUCCESS) {
+            return FALSE;
+        }
+
+        if (call Delivers.size() == 1) {
+            /* The queue was empty, so there was no task. */
+            if (post deliver_task()) {
+                call Delivers.dequeue();
+                return FALSE;
+            }
+        }
+
+        return TRUE;
+    }
+
+    static bool subscribe (herp_opid_t Id, routes_t Routes) {
+        subscr_item_t ListItem;
+
+        ListItem = call SubscrPool.get();
+        if (ListItem == NULL) return FALSE;
+
+        ListItem->next = Routes->subscr;
+        Routes->subscr = ListItem;
+
+        return TRUE;
     }
 
 }
