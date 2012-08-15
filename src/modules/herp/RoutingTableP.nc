@@ -36,9 +36,8 @@ implementation {
     event error_t Table.value_init (const am_addr_t *Key, routes_t Val) {
         int i;
 
-        Val->subscr = NULL;
+        memset((void *)Val, 0, sizeof(routes_t));
         for (i = 0; i < HERP_MAX_ROUTES; i ++) {
-            memset((void *)Val, 0, sizeof(routes_t));
             Val->entries[i].target = *Key;
             Val->entries[i].sched = NULL;
             Val->entries[i].state = DEAD;
@@ -148,14 +147,15 @@ implementation {
     }
 
     command herp_rtres_t RTab.flag_working[herp_opid_t OpId] (herp_rtentry_t Entry) {
-        switch (Entry->state) {
 
+        switch (Entry->state) {
             case FRESH:
             case BUILDING:
                 return HERP_RT_ALREADY;
 
             default:
                 Entry->owner = OpId;
+                Entry->state = BUILDING;
 
                 // TODO: set timeout, in order to avoid starving.
                 //
@@ -210,6 +210,7 @@ implementation {
 
                 Subscr = Routes->subscr;
                 Routes->subscr = Subscr->next;
+
                 enqueue(Subscr->id, D.entry);
                 call SubscrPool.put(Subscr);
             }
@@ -252,6 +253,7 @@ implementation {
         if (ListItem == NULL) return FALSE;
 
         ListItem->next = Routes->subscr;
+        ListItem->id = Id;
         Routes->subscr = ListItem;
 
         return TRUE;
