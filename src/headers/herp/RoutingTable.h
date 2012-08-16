@@ -5,6 +5,8 @@
 
 typedef struct herp_rtentry * herp_rtentry_t;
 
+typedef struct herp_rtroute * herp_rtroute_t;
+
 typedef struct {
     am_addr_t first_hop;
     uint16_t n_hops;

@@ -6,13 +6,13 @@
 
 #include <RoutingTable.h>
 
-struct herp_rtentry {
-    am_addr_t target;
+struct herp_rtroute {
     herp_rthop_t hop;
-    sched_item_t sched;
     herp_opid_t owner;
+    herp_rtentry_t ref;
+    sched_item_t sched;
     enum {
-        DEAD,
+        DEAD = 0,
         BUILDING,
         FRESH,
         SEASONED
@@ -24,14 +24,20 @@ typedef struct subscr_item {
     struct subscr_item * next;
 } * subscr_item_t;
 
-typedef struct routes {
-    struct herp_rtentry entries[HERP_MAX_ROUTES];
+struct herp_rtentry {
+    struct herp_rtroute routes[HERP_MAX_ROUTES];
+    uint16_t scan_start;
+
     subscr_item_t subscr;
-} * routes_t;
+    am_addr_t target;
+    bool enqueued;
+};
 
 typedef struct {
-    herp_opid_t subscriber;
-    herp_rtentry_t entry;
-} deliver_t;
+    herp_rtroute_t dead;
+    herp_rtroute_t building;
+    herp_rtroute_t fresh;
+    herp_rtroute_t seasoned;
+} scan_t;
 
 #endif // ROUTING_TABLE_PRIV_H
