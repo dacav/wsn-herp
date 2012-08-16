@@ -6,7 +6,7 @@
 
 generic module MultiTimerP (typedef event_data_t) {
     provides {
-        interface MultiTimer[herp_opid_t]<event_data_t>;
+        interface MultiTimer<event_data_t>[herp_opid_t];
         interface Init;
     }
     uses {
@@ -24,8 +24,9 @@ implementation {
         return SUCCESS;
     }
 
-    command
-    sched_item_t MultiTimer.schedule[herp_opid_t opid] (uint32_t T, event_data_t *D) {
+    default event void MultiTimer.fired[herp_opid_t] (event_data_t *) {}
+
+    command sched_item_t MultiTimer.schedule[herp_opid_t opid] (uint32_t T, event_data_t *D) {
         sched_item_t fresh;
         sched_item_t cursor, pr;
         uint32_t now;
@@ -112,7 +113,7 @@ implementation {
             ed = (event_data_t *) e->store;
             call Pool.put(e);
 
-            signal MultiTimer[ed->id].fired(ed);
+            signal MultiTimer.fired[e->id](ed);
 
         } while (sched && sched->time == now);
 

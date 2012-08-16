@@ -14,7 +14,7 @@ module RoutingTableP {
         interface Queue<deliver_t> as Delivers;
         interface Pool<struct subscr_item> as SubscrPool;
 
-        // interface MultiTimer ...
+        interface MultiTimer<struct herp_rtentry>;
     }
 
 }
@@ -23,6 +23,8 @@ implementation {
 
     static bool subscribe (herp_opid_t Id, routes_t Routes);
     static bool enqueue (herp_opid_t Id, herp_rtentry_t Entry);
+    static void set_timer (herp_rtentry_t Entry, uint32_t Time);
+
     task void deliver_task ();
 
     event hash_index_t Table.key_hash (const am_addr_t *Key) {
@@ -39,7 +41,6 @@ implementation {
         memset((void *)Val, 0, sizeof(routes_t));
         for (i = 0; i < HERP_MAX_ROUTES; i ++) {
             Val->entries[i].target = *Key;
-            Val->entries[i].sched = NULL;
             Val->entries[i].state = DEAD;
         }
 
@@ -58,7 +59,6 @@ implementation {
             call SubscrPool.put(Item);
         }
 
-        #if 0
         for (i = 0; i < HERP_MAX_ROUTES; i ++) {
             herp_rtentry_t Entry = &(Val->entries[i]);
 
@@ -67,8 +67,26 @@ implementation {
                 Entry->sched = NULL;
             }
         }
-        #endif
 
+    }
+
+    event void MultiTimer.fired (herp_rtentry_t Entry) {
+
+        dbg("Out", "Fired timer for %p:\n", Entry);
+
+        Entry->sched = NULL;
+        switch (Entry->state) {
+            case DEAD:
+                assert(0);  // WTF?
+            case FRESH:
+                dbg("Out", "\tFRESH to SEASONED\n");
+                Entry->state = SEASONED;
+                set_timer(Entry, HERP_RT_TIME_SEASONED);
+                break;
+            default:
+                dbg("Out", "\t...DEAD\n");
+                Entry->state = DEAD;
+        }
     }
 
 	command herp_rtres_t RTab.new_route[herp_opid_t OpId] (am_addr_t Node, const herp_rthop_t *Hop) {
@@ -156,11 +174,7 @@ implementation {
             default:
                 Entry->owner = OpId;
                 Entry->state = BUILDING;
-
-                // TODO: set timeout, in order to avoid starving.
-                //
-                // call MultiTimer.nullify(Entry->sched)
-                // Entry->sched = call MultiTimer.something(...)
+                set_timer(Entry, HERP_RT_TIME_BUILDING);
 
                 return HERP_RT_SUCCESS;
         }
@@ -170,11 +184,10 @@ implementation {
 
         if (Entry->owner != OpId) return HERP_RT_ERROR;
 
-        Entry->state = FRESH;
         Entry->hop.first_hop = Hop->first_hop;
         Entry->hop.n_hops = Hop->n_hops;
-
-        // TODO: reset timer
+        Entry->state = FRESH;
+        set_timer(Entry, HERP_RT_TIME_FRESH);
 
         return enqueue(OpId, Entry) ? HERP_RT_SUBSCRIBED : HERP_RT_ERROR;
     }
@@ -187,6 +200,7 @@ implementation {
             return HERP_RT_ERROR;
         }
         ToDrop->state = DEAD;
+        set_timer(ToDrop, 0);
 
         return call RTab.get_route[OpId](ToDrop->target, Entry);
     }
@@ -257,6 +271,13 @@ implementation {
         Routes->subscr = ListItem;
 
         return TRUE;
+    }
+
+    static void set_timer (herp_rtentry_t Entry, uint32_t Time) {
+        if (Entry->sched) {
+            call MultiTimer.nullify(Entry->sched);
+        }
+        Entry->sched = Time > 0 ? call MultiTimer.schedule(Time, Entry) : NULL;
     }
 
 }
