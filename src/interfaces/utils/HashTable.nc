@@ -15,7 +15,7 @@ interface HashTable <key_type, value_type> {
      * triggered.
      *
      * @param Key The Key of the fetched item;
-     * @param MustExist if TRUE and if there's no item associated to the
+     * @param MustExist if FALSE, and if there's no item associated to the
      *        required Key, build a fresh one.
      *
      * @retval A new Slot on success;
