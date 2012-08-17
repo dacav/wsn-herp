@@ -30,7 +30,10 @@ struct herp_rtentry {
 
     subscr_item_t subscr;
     am_addr_t target;
-    bool enqueued;
+
+    /* Flags */
+    unsigned enqueued : 1;
+    unsigned valid : 1;
 };
 
 typedef struct {

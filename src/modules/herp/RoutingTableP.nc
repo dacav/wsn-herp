@@ -14,6 +14,8 @@ module RoutingTableP {
         interface Queue<herp_rtentry_t> as Delivers;
         interface Pool<struct subscr_item> as SubscrPool;
         interface MultiTimer<struct herp_rtroute>;
+
+        // interface MultiTimer<struct herp_rtentry> as ... (free entries)
     }
 
 }
@@ -28,23 +30,30 @@ implementation {
     static void set_timer (herp_rtroute_t Route, uint32_t T);
     static void mark_building (herp_rtroute_t Route, herp_opid_t OpId);
     static void copy_hop (herp_rthop_t *Dst, const herp_rthop_t *Src);
+    static herp_rtroute_t replace_candidate (const herp_rtentry_t Entry);
+    static void check_useful (herp_rtentry_t Entry);
+    static bool init_route (herp_rtroute_t Route, const herp_rthop_t *Hop,
+                            herp_opid_t OpId);
 
     /* -- Events & Commands from interfaces --------------------------- */
+
+    command const herp_rthop_t * RTab.get_hop [herp_opid_t OpId](const herp_rtroute_t Route) {
+        return &Route->hop;
+    }
 
     command herp_rtres_t RTab.get_route [herp_opid_t OpId](am_addr_t Node, herp_rtentry_t *Out) {
         herp_rtentry_t Entry;
         scan_t Found;
 
-        Entry = call Table.get_item(&Node, FALSE);
-        if (Entry == NULL) return HERP_RT_ERROR;
-        scan(Entry, &Found);
+        Entry = call Table.get_item(&Node, TRUE);
+        if (Entry == NULL) return HERP_RT_REACH;
 
+        scan(Entry, &Found);
         if (Found.fresh) {
             subscribe(Entry, OpId);
             enqueue(Entry);
             return HERP_RT_SUBSCRIBED;
         }
-
         if (Found.building) {
             subscribe(Entry, OpId);
             return HERP_RT_SUBSCRIBED;
@@ -56,42 +65,69 @@ implementation {
 
     command herp_rtroute_t RTab.get_job [herp_opid_t OpId](herp_rtentry_t Entry) {
         scan_t Found;
-        herp_rtroute_t Selected;
+
+        if (Entry == NULL) return NULL;
 
         scan(Entry, &Found);
-
         if (Found.fresh || Found.building) {
             return NULL;
         }
+        if (Found.seasoned) {
+            mark_building(Found.seasoned, OpId);
+            return Found.seasoned;
+        }
 
-        Selected = Found.seasoned ? Found.seasoned : Found.dead;
-        assert(Selected != NULL);
-        mark_building(Selected, OpId);
-
-        return Selected;
+        return NULL;
     }
 
 	command herp_rtres_t RTab.new_route [herp_opid_t OpId](am_addr_t Node, const herp_rthop_t *Hop) {
-        // TODO: write code here
-        return HERP_RT_ERROR;
+        herp_rtentry_t Entry;
+        herp_rtroute_t Selected;
+        scan_t Found;
+        int i;
+
+        Entry = call Table.get_item(&Node, FALSE);
+        if (Entry == NULL) return HERP_RT_ERROR;
+
+        Selected = NULL;
+        for (i = 0; i < HERP_MAX_ROUTES; i ++) {
+            herp_rtroute_t R = &(Entry->routes[i]);
+
+            if (R->hop.first_hop == Hop->first_hop) {
+                if (R->hop.n_hops > Hop->n_hops || R->state != FRESH) {
+                    Selected = R;
+                }
+            }
+        }
+
+        if (Selected == NULL) {
+            scan(Entry, &Found);
+            Selected = Found.dead ? Found.dead
+                     : Found.seasoned ? Found.seasoned
+                     : Found.building ? Found.building
+                     : NULL;
+        }
+
+        assert(Selected != NULL);
+        return init_route(Selected, Hop, OpId)
+               ? HERP_RT_SUBSCRIBED
+               : HERP_RT_ERROR;
+
     }
 
 	command herp_rtres_t RTab.update_route [herp_opid_t OpId](herp_rtroute_t Route, const herp_rthop_t *Hop) {
 
-        herp_rtentry_t Entry;
-
+        if (!Route->ref->valid) {
+            return HERP_RT_ERROR;
+        }
         if (Route->state != BUILDING || Route->owner != OpId) {
             return HERP_RT_ERROR;
         }
 
-        Route->state = FRESH;
-        set_timer(Route, HERP_RT_TIME_FRESH);
-        copy_hop(&Route->hop, Hop);
-
-        Entry = Route->ref;
-        return (subscribe(Entry, OpId) && enqueue(Entry))
+        return init_route(Route, Hop, OpId)
                ? HERP_RT_SUBSCRIBED
                : HERP_RT_ERROR;
+
     }
 
     command herp_rtres_t RTab.drop_route [herp_opid_t OpId](herp_rtroute_t ToDrop) {
@@ -124,6 +160,7 @@ implementation {
 
         memset((void *)Entry, 0, sizeof(herp_rtentry_t));
         Entry->target = *Target;
+        Entry->valid = 1; 
 
         for (i = 0; i < HERP_MAX_ROUTES; i ++) {
             Entry->routes[i].ref = Entry;
@@ -137,6 +174,7 @@ implementation {
         int i;
 
         assert(Entry->subscr == NULL);
+        assert(!Entry->valid);
 
         for (i = 0; i < HERP_MAX_ROUTES; i ++) {
             herp_rtroute_t R = &Entry->routes[i];
@@ -148,25 +186,22 @@ implementation {
     }
 
     event void MultiTimer.fired (herp_rtroute_t Route) {
-        int NextState;
         herp_rtentry_t Entry;
 
+        Route->sched = NULL;
         switch (Route->state) {
             case BUILDING:
             case SEASONED:
-                NextState = DEAD;
-                Entry = Route->ref;
-                if (Entry->subscr) enqueue(Entry);
+                Route->state = DEAD;
+                if ((Entry = Route->ref) != NULL) enqueue(Entry);
                 break;
             case FRESH:
-                NextState = SEASONED;
+                Route->state = SEASONED;
+                set_timer(Route, HERP_RT_TIME_SEASONED);
                 break;
             default:
                 assert(0);  // WTF?
         }
-
-        Route->sched = NULL;
-        Route->state = NextState;
     }
 
     /* -- Deliver queue management ------------------------------------ */
@@ -184,7 +219,7 @@ implementation {
             post deliver_task();
         }
 
-        Entry->enqueued = FALSE;
+        Entry->enqueued = 0;
         if (Entry->subscr == NULL) return;
 
         scan(Entry, &Found);
@@ -203,6 +238,8 @@ implementation {
             signal RTab.deliver[Sub->id](Outcome, Entry->target, Hop);
             call SubscrPool.put(Sub);
         } while (Entry->subscr);
+
+        check_useful(Entry);
     }
 
     /* -- Misc utility functions -------------------------------------- */
@@ -224,7 +261,7 @@ implementation {
         if (Entry->enqueued) return TRUE;
 
         if (call Delivers.enqueue(Entry) != SUCCESS) return FALSE;
-        Entry->enqueued = TRUE;
+        Entry->enqueued = 1;
 
         if (call Delivers.size() == 1) {
             if (post deliver_task()) return FALSE;
@@ -263,9 +300,13 @@ implementation {
 
     static void set_timer (herp_rtroute_t Route, uint32_t T) {
 
-        if (Route->sched) call MultiTimer.nullify(Route->sched);
-        Route->sched = (T > 0) ? call MultiTimer.schedule(T, Route)
-                               : NULL;
+        if (Route->sched) {
+            call MultiTimer.nullify(Route->sched);
+        }
+
+        Route->sched = (T > 0)
+            ? call MultiTimer.schedule(T, Route)
+            : NULL;
     }
 
     static void mark_building (herp_rtroute_t Route, herp_opid_t OpId) {
@@ -276,6 +317,35 @@ implementation {
 
     static void copy_hop (herp_rthop_t *Dst, const herp_rthop_t *Src) {
         memcpy((void *)Dst, (const void *)Src, sizeof(herp_rthop_t));
+    }
+
+    static void check_useful (herp_rtentry_t Entry) {
+        scan_t Found;
+
+        /* Cannot deallocate while in queue */
+        if (Entry->enqueued) return;
+
+        /* Cannot deallocate if we have non-dead routes */
+        scan(Entry, &Found);
+        if (Found.fresh) return;
+        if (Found.building) return;
+        if (Found.seasoned) return;
+
+        /* Deallocation */
+        Entry->valid = 0;
+        call Table.get_del(&Entry->target);
+    }
+
+    static bool init_route (herp_rtroute_t Route, const herp_rthop_t *Hop,
+                            herp_opid_t OpId) {
+        herp_rtentry_t Entry;
+
+        Route->state = FRESH;
+        set_timer(Route, HERP_RT_TIME_FRESH);
+        copy_hop(&Route->hop, Hop);
+
+        Entry = Route->ref;
+        return (subscribe(Entry, OpId) && enqueue(Entry));
     }
 
 }
