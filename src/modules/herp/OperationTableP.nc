@@ -135,7 +135,24 @@ implementation {
     }
 
     command void OpTab.free_internal (herp_opid_t IntOpId) {
+
+#define WITH_ASSERT
+#ifdef WITH_ASSERT
+        hash_slot_t Slot;
+        herp_oprec_t Rec;
+
+        Slot = call IntMap.get(&IntOpId, TRUE);
+        if (Slot == NULL) return;
+
+        Rec = call IntMap.item(Slot);
+        /* FIXME: if needed, find a way of automatically redirect
+         * non-internal records to free_external */
+        assert(Rec->owner == TOS_NODE_ID);
+        call IntMap.del(Slot);
+#undef WITH_ASSERT
+#else
         call IntMap.get_del(&IntOpId);
+#endif
         call OperationId.put(IntOpId);
     }
 
