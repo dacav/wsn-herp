@@ -43,4 +43,7 @@ interface OperationTable<user_data> {
     command user_data * fetch_user_data (herp_oprec_t Rec);
 
     command am_addr_t fetch_owner (herp_oprec_t Rec);
+
+    event error_t data_init (herp_oprec_t Rec, user_data *UserData);
+
 }

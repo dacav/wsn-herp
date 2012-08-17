@@ -31,16 +31,19 @@ implementation {
     }
 
     event error_t IntMap.value_init (const herp_opid_t *K, herp_oprec_t V) {
-        user_data *UData;
+        user_data *UserData;
 
-        UData = call UserDataPool.get();
-        if (UData == NULL) return FAIL;
+        UserData = call UserDataPool.get();
+        if (UserData == NULL) return FAIL;
+
+        if (signal OpTab.data_init(V, UserData) != SUCCESS) {
+            call UserDataPool.put(UserData);
+            return FAIL;
+        }
 
         V->ids.external = V->ids.internal = *K;
-        V->store = (void *)UData;
+        V->store = (void *)UserData;
         V->owner = TOS_NODE_ID;
-        V->subscr.prev = NULL;
-        V->subscr.next = NULL;
 
         return SUCCESS;
     }
@@ -117,9 +120,6 @@ implementation {
             Ret->ids.internal = *IntOpId;
             Ret->ids.external = ExtOpId;
             Ret->owner = Owner;
-
-            Ret->subscr.prev = NULL;
-            Ret->subscr.next = NULL;
 
             return Ret;
         }
