@@ -139,8 +139,7 @@ implementation {
 
         ToDrop->state = DEAD;
         set_timer(ToDrop, 0);
-        Entry = ToDrop->ref;
-        if (Entry->subscr) enqueue(Entry);
+        enqueue(ToDrop->ref);
 
         return HERP_RT_SUCCESS;
     }
@@ -173,8 +172,9 @@ implementation {
                                     herp_rtentry_t Entry) {
         int i;
 
-        assert(Entry->subscr == NULL);
-        assert(!Entry->valid);
+        assert(Entry->subscr == NULL && Entry->valid);
+
+        Entry->valid = 0;
 
         for (i = 0; i < HERP_MAX_ROUTES; i ++) {
             herp_rtroute_t R = &Entry->routes[i];
@@ -193,7 +193,7 @@ implementation {
             case BUILDING:
             case SEASONED:
                 Route->state = DEAD;
-                if ((Entry = Route->ref) != NULL) enqueue(Entry);
+                enqueue(Route->ref);
                 break;
             case FRESH:
                 Route->state = SEASONED;
@@ -214,30 +214,34 @@ implementation {
 
         assert(!call Delivers.empty());
 
+        /* Queue management */
         Entry = call Delivers.dequeue();
         if (!call Delivers.empty()) {
             post deliver_task();
         }
 
         Entry->enqueued = 0;
-        if (Entry->subscr == NULL) return;
+        if (Entry->subscr) {
 
-        scan(Entry, &Found);
-        if (Found.fresh) {
-            Outcome = HERP_RT_SUCCESS;
-            Hop = &Found.fresh->hop;
-        } else {
-            Outcome = HERP_RT_RETRY;
-            Hop = NULL;
+            scan(Entry, &Found);
+            Outcome = HERP_RT_SUBSCRIBED;
+            if (Found.fresh) {
+                Outcome = HERP_RT_SUCCESS;
+                Hop = &Found.fresh->hop;
+            } else if (!Found.building) {
+                Outcome = HERP_RT_RETRY;
+                Hop = NULL;
+            }
+
+            if (Outcome != HERP_RT_SUBSCRIBED) do {
+                subscr_item_t Sub = Entry->subscr;
+
+                Entry->subscr = Sub->next;
+                signal RTab.deliver[Sub->id](Outcome, Entry->target, Hop);
+                call SubscrPool.put(Sub);
+            } while (Entry->subscr);
+
         }
-
-        do {
-            subscr_item_t Sub = Entry->subscr;
-
-            Entry->subscr = Sub->next;
-            signal RTab.deliver[Sub->id](Outcome, Entry->target, Hop);
-            call SubscrPool.put(Sub);
-        } while (Entry->subscr);
 
         check_useful(Entry);
     }
@@ -322,8 +326,10 @@ implementation {
     static void check_useful (herp_rtentry_t Entry) {
         scan_t Found;
 
-        /* Cannot deallocate while in queue */
-        if (Entry->enqueued) return;
+        assert(!Entry->enqueued);
+
+        /* No more subscribers */
+        if (Entry->subscr) return;
 
         /* Cannot deallocate if we have non-dead routes */
         scan(Entry, &Found);
@@ -332,7 +338,7 @@ implementation {
         if (Found.seasoned) return;
 
         /* Deallocation */
-        Entry->valid = 0;
+        dbg("Out", "Table deallocation\n");
         call Table.get_del(&Entry->target);
     }
 
