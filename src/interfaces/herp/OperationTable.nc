@@ -36,14 +36,14 @@ interface OperationTable<user_data> {
 
     command void free_external (am_addr_t Owner, herp_opid_t ExtOpId);
 
-    command herp_opid_t fetch_external_id (herp_oprec_t Rec);
+    command herp_opid_t fetch_external_id (const herp_oprec_t Rec);
 
-    command herp_opid_t fetch_internal_id (herp_oprec_t Rec);
+    command herp_opid_t fetch_internal_id (const herp_oprec_t Rec);
 
-    command user_data * fetch_user_data (herp_oprec_t Rec);
+    command user_data * fetch_user_data (const herp_oprec_t Rec);
 
-    command am_addr_t fetch_owner (herp_oprec_t Rec);
+    command am_addr_t fetch_owner (const herp_oprec_t Rec);
 
-    event error_t data_init (herp_oprec_t Rec, user_data *UserData);
+    event error_t data_init (const herp_oprec_t Rec, user_data *UserData);
 
 }

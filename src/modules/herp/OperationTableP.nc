@@ -179,19 +179,19 @@ implementation {
         }
     }
 
-    command herp_opid_t OpTab.fetch_external_id (herp_oprec_t Rec) {
+    command herp_opid_t OpTab.fetch_external_id (const herp_oprec_t Rec) {
         return Rec->ids.external;
     }
 
-    command herp_opid_t OpTab.fetch_internal_id (herp_oprec_t Rec) {
+    command herp_opid_t OpTab.fetch_internal_id (const herp_oprec_t Rec) {
         return Rec->ids.internal;
     }
 
-    command user_data * OpTab.fetch_user_data (herp_oprec_t Rec) {
+    command user_data * OpTab.fetch_user_data (const herp_oprec_t Rec) {
         return (user_data *) Rec->store;
     }
 
-    command am_addr_t OpTab.fetch_owner (herp_oprec_t Rec) {
+    command am_addr_t OpTab.fetch_owner (const herp_oprec_t Rec) {
         return Rec->owner;
     }
 
