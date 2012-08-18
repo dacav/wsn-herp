@@ -14,8 +14,6 @@ module RoutingTableP {
         interface Queue<herp_rtentry_t> as Delivers;
         interface Pool<struct subscr_item> as SubscrPool;
         interface MultiTimer<struct herp_rtroute>;
-
-        // interface MultiTimer<struct herp_rtentry> as ... (free entries)
     }
 
 }
@@ -29,6 +27,7 @@ implementation {
     static bool subscribe (herp_rtentry_t Entry, herp_opid_t OpId);
     static void set_timer (herp_rtroute_t Route, uint32_t T);
     static void mark_building (herp_rtroute_t Route, herp_opid_t OpId);
+    static void mark_seasoned (herp_rtroute_t Route);
     static void copy_hop (herp_rthop_t *Dst, const herp_rthop_t *Src);
     static herp_rtroute_t replace_candidate (const herp_rtentry_t Entry);
     static void check_useful (herp_rtentry_t Entry);
@@ -78,6 +77,20 @@ implementation {
         }
 
         return NULL;
+    }
+
+    command herp_rtres_t HTab.drop_job [herp_opid_t OpId](herp_rtroute_t Route) {
+        if (!Route->ref->valid) {
+            return HERP_RT_ERROR;
+        }
+        if (Route->state != BUILDING || Route->owner != OpId) {
+            return HERP_RT_ERROR;
+        }
+
+        mark_seasoned(Route);
+        enqueue(Route->ref);
+
+        return HERP_RT_SUCCESS;
     }
 
 	command herp_rtres_t RTab.new_route [herp_opid_t OpId](am_addr_t Node, const herp_rthop_t *Hop) {
@@ -196,8 +209,7 @@ implementation {
                 enqueue(Route->ref);
                 break;
             case FRESH:
-                Route->state = SEASONED;
-                set_timer(Route, HERP_RT_TIME_SEASONED);
+                mark_seasoned(Route);
                 break;
             default:
                 assert(0);  // WTF?
@@ -317,6 +329,11 @@ implementation {
         Route->state = BUILDING;
         Route->owner = OpId;
         set_timer(Route, HERP_RT_TIME_BUILDING);
+    }
+
+    static void mark_seasoned (herp_rtroute_t Route) {
+        Route->state = SEASONED;
+        set_timer(Route, HERP_RT_TIME_SEASONED);
     }
 
     static void copy_hop (herp_rthop_t *Dst, const herp_rthop_t *Src) {

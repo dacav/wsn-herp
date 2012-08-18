@@ -27,7 +27,7 @@ interface RoutingTable {
      *             herp_rtres_t::HERP_RT_VERIFY is returned).
      *
      *
-     * @retval herp_rtres_t::HERP_RT_ERROR On failure (memory exhausted);
+     * @retval herp_rtres_t::HERP_RT_ERROR On failure;
      * @retval herp_rtres_t::HERP_RT_REACH If there's no Entry;
      * @retval herp_rtres_t::HERP_RT_VERIFY If the Entry needs to be
      *         verified;
@@ -37,6 +37,8 @@ interface RoutingTable {
     command herp_rtres_t get_route (am_addr_t Node, herp_rtentry_t *Out);
 
     command herp_rtroute_t get_job (herp_rtentry_t Entry);
+
+    command herp_rtres_t drop_job (herp_rtroute_t Route);
 
     command const herp_rthop_t * get_hop (const herp_rtroute_t Route);
 
