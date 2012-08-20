@@ -150,7 +150,6 @@ implementation {
 
     static inline herp_msg_t * msg_unwrap (message_t *Msg, uint8_t Size) {
 
-        dbg("Out", "msg_unwrap(%p, %d)\n", Msg, Size);
         call SubPacket.setPayloadLength(Msg, Size);
         return (herp_msg_t *) call SubPacket.getPayload(Msg, Size);
     }
