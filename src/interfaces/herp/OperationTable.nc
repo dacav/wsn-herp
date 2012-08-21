@@ -28,7 +28,8 @@ interface OperationTable<user_data> {
      * @retval A pointer to the record on success;
      * @retval NULL on failure (no resources available).
      */
-    command herp_oprec_t external (am_addr_t Owner, herp_opid_t ExtOpId);
+    command herp_oprec_t external (am_addr_t Owner, herp_opid_t ExtOpId,
+                                   bool MustExist);
 
     command void free_record (herp_oprec_t Rec);
 

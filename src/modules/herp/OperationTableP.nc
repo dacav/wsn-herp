@@ -97,7 +97,8 @@ implementation {
         return call IntMap.get_item(&IntOpId, TRUE);
     }
 
-    command herp_oprec_t OpTab.external (am_addr_t Owner, herp_opid_t ExtOpId) {
+    command herp_oprec_t OpTab.external (am_addr_t Owner, herp_opid_t ExtOpId,
+                                         bool MustExist) {
 
         if (Owner == TOS_NODE_ID) {
             return call OpTab.internal(ExtOpId);
@@ -110,7 +111,7 @@ implementation {
             ExtKey.node = Owner;
             ExtKey.ext_id = ExtOpId;
 
-            Slot = call ExtMap.get(&ExtKey, FALSE);
+            Slot = call ExtMap.get(&ExtKey, MustExist);
             if (Slot == NULL) return NULL;
 
             IntOpId = call ExtMap.item(Slot);
