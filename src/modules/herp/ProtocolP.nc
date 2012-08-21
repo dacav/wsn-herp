@@ -26,6 +26,7 @@ implementation {
     static message_t * msg_dup (const message_t *Orig);
     static inline herp_msg_t * msg_unwrap (message_t *Msg, uint8_t Len);
     static inline void msg_copy (message_t *Dst, const message_t *Src);
+    static void forward (message_t * Msg, uint8_t Len, am_addr_t To);
     static void header_init (header_t *Hdr, op_t OpType, herp_opid_t OpId,
                              am_addr_t To);
 
@@ -87,9 +88,22 @@ implementation {
         return RetVal;
     }
 
-    command error_t Protocol.send_data (herp_opid_t OpId, am_addr_t Target,
-                                        am_addr_t FirstHop, message_t *Msg,
-                                        uint8_t MsgLen) {
+    command error_t init_user_msg (message_t *Msg, herp_opid_t OpId,
+                                   am_addr_t Target) {
+        herp_msg_t *HerpMsg;
+        header_t *Hdr;
+
+        HerpMsg = msg_unwrap(sizeof(header_t));
+        if (HerpMsg == NULL) return FAIL;
+
+        Hdr = &Herp_msg->header;
+        header_init(Hdr, USER_DATA, OpId, Target);
+
+        return SUCCESS;
+    }
+
+    command error_t Protocol.send_data (message_t *Msg, uint8_t MsgLen,
+                                        am_addr_t FirstHop) {
         herp_msg_t *HerpMsg;
         error_t RetVal;
         header_t *Hdr;
@@ -99,43 +113,13 @@ implementation {
             return ENOMEM;
         }
         MsgLen += sizeof(header_t);
-        HerpMsg = msg_unwrap(Msg, MsgLen);
-        if (HerpMsg == NULL) {
-            call MsgPool.put(Msg);
-            return ESIZE;
-        }
-        Hdr = &HerpMsg->header;
-        header_init(Hdr, USER_DATA, OpId, Target);
 
-        /* Note: Payload is supposed to be already inserted, user message
-         * is used direcly (the user gave us the message!). */
-
+        call SubPacket.setPayloadLength(Msg, MsgLen);
         RetVal = call Send.send(FirstHop, Msg, MsgLen);
         if (RetVal != SUCCESS){
             call MsgPool.put(Msg);
         }
         return RetVal;
-    }
-
-    static void forward (message_t * Msg, uint8_t Len, am_addr_t To) {
-        herp_msg_t *HerpMsg;
-
-        Msg = msg_dup(Msg);
-        HerpMsg = msg_unwrap(Msg, Len);
-        if (HerpMsg == NULL) return;
-
-        switch (HerpMsg->header.op.type) {
-            case PATH_EXPLORE:
-            case PATH_BUILD:
-                HerpMsg->data.path.hop_count ++;
-                HerpMsg->data.path.prev = TOS_NODE_ID;
-            case USER_DATA:
-                break;
-        }
-
-        if (call Send.send(To, Msg, Len) != SUCCESS) {
-            call MsgPool.put(Msg);
-        }
     }
 
     event message_t * Receive.receive (message_t *Msg, void * Payload,
@@ -244,6 +228,27 @@ implementation {
         if (Ret == NULL) return NULL;
         msg_copy(Ret, Orig);
         return Ret;
+    }
+
+    static void forward (message_t * Msg, uint8_t Len, am_addr_t To) {
+        herp_msg_t *HerpMsg;
+
+        Msg = msg_dup(Msg);
+        HerpMsg = msg_unwrap(Msg, Len);
+        if (HerpMsg == NULL) return;
+
+        switch (HerpMsg->header.op.type) {
+            case PATH_EXPLORE:
+            case PATH_BUILD:
+                HerpMsg->data.path.hop_count ++;
+                HerpMsg->data.path.prev = TOS_NODE_ID;
+            case USER_DATA:
+                break;
+        }
+
+        if (call Send.send(To, Msg, Len) != SUCCESS) {
+            call MsgPool.put(Msg);
+        }
     }
 
 }
