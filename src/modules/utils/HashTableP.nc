@@ -126,4 +126,7 @@ implementation {
         return &slots[signal HashTable.key_hash(Key) % NSLOTS];
     }
 
+    default event void HashTable.value_dispose (const key_t *Key, value_t *Val) {
+    }
+
 }
