@@ -1,7 +1,7 @@
 
  #include <ProtocolP.h>
 
-generic configuration ProtocolC (uint8_t MSG_POOL_SIZE) {
+generic configuration ProtocolC (uint8_t MSG_POOL_SIZE, am_id_t AM_ID) {
 
     provides {
         interface Protocol;
@@ -15,8 +15,8 @@ generic configuration ProtocolC (uint8_t MSG_POOL_SIZE) {
 implementation {
 
     components
-        new AMSenderC(HERP_MSG),
-        new AMReceiverC(HERP_MSG),
+        new AMSenderC(AM_ID),
+        new AMReceiverC(AM_ID),
         new PoolC(message_t, MSG_POOL_SIZE),
         ActiveMessageC,
         ProtocolP;

@@ -3,11 +3,6 @@
 
 #include <Protocol.h>
 
-/** ID for Active Message */
-enum {
-    HERP_MSG = unique("HERP")
-};
-
 /* -- Message Formats ------------------------------------------------ */
 
 /** Type identifiers for messages. */

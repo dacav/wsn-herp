@@ -120,8 +120,6 @@ implementation {
     static void forward (message_t * Msg, uint8_t Len, am_addr_t To) {
         herp_msg_t *HerpMsg;
 
-        dbg("Out", "Forwarding to %d\n", To);
-
         Msg = msg_dup(Msg);
         HerpMsg = msg_unwrap(Msg, Len);
         if (HerpMsg == NULL) return;
