@@ -46,4 +46,6 @@ interface OperationTable<user_data> {
 
     event error_t data_init (const herp_oprec_t Rec, user_data *UserData);
 
+    event void data_dispose (const herp_oprec_t Rec, user_data *UserData);
+
 }

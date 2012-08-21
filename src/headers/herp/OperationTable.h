@@ -15,13 +15,7 @@ struct herp_oprec {
         herp_opid_t external;   /**< External (Internal for remote node); */
     } ids;
 
-    am_addr_t owner;           /**< Owner node for the operation. */
-
-    struct {
-        herp_oprec_t prev;     /**< Prev in list; */
-        herp_oprec_t next;     /**< Next in list. */
-    } subscr;
-
+    am_addr_t owner;            /**< Owner node for the operation. */
     void * store;               /**< User data pointer */
 
 };

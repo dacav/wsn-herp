@@ -49,7 +49,10 @@ implementation {
     }
 
     event void IntMap.value_dispose (const herp_opid_t *K, herp_oprec_t V) {
-        call UserDataPool.put((user_data *) V->store);
+        user_data Data = (user_data *) V->store;
+
+        call OpTab.data_dispose(Data);
+        call UserDataPool.put(Data);
         call OperationId.put(*K);
     }
 
@@ -193,6 +196,10 @@ implementation {
 
     command am_addr_t OpTab.fetch_owner (const herp_oprec_t Rec) {
         return Rec->owner;
+    }
+
+    default event void OpTab.data_dispose (const herp_oprec_t Rec,
+                                           user_data *UserData) {
     }
 
 }
