@@ -32,8 +32,8 @@ typedef nx_struct {
      * used dependently on the value of header.op.type */
     nx_union {
         nx_struct {
-            nx_uint16_t hop_count;  /**< Incremental with hops; */
             nx_am_addr_t prev;      /**< Previous node */
+            nx_uint16_t hop_count;  /**< Incremental with hops; */
         } path;
         nx_uint8_t user_payload[0]; /**< Transmission payload */
     } data;

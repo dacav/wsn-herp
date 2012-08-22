@@ -136,31 +136,29 @@ implementation {
         Info.from = HerpMsg->header.from;
         Info.to = HerpMsg->header.to;
 
+        dbg("Out", "Received\n");
+
         Type = HerpMsg->header.op.type;
         if (Type == USER_DATA) {
-            herp_userdata_t Data = {
-                .msg    = Msg,
-                .len    = Len - sizeof(header_t)
-            };
 
-            signal Protocol.got_payload(&Info, &Data);
+            Len -= sizeof(header_t);
+            return signal Protocol.got_payload(&Info, Msg, Len);
+
         } else {
-            herp_proto_t Proto = {
-                .node       = HerpMsg->data.path.prev,
-                .hop_count  = HerpMsg->data.path.hop_count
-            };
+            am_addr_t Prev = HerpMsg->data.path.prev;
+            uint16_t HopCount = HerpMsg->data.path.hop_count;
 
             if (Type == PATH_EXPLORE) {
-                signal Protocol.got_explore(&Info, &Proto);
+                signal Protocol.got_explore(&Info, Prev, HopCount);
             } else {
-                signal Protocol.got_build(&Info, &Proto);
+                signal Protocol.got_build(&Info, Prev, HopCount);
             }
-        }
 
-        return Msg;
+            return Msg;
+        }
     }
 
-    static error_t path_forward (const herp_opinfo_t *Info, op_t OpType, const herp_proto_t *Hop) {
+    static error_t path_forward (const herp_opinfo_t *Info, op_t OpType, am_addr_t Next, uint16_t HopCount) {
         message_t *New;
         herp_msg_t *HerpMsg;
         error_t RetVal;
@@ -173,10 +171,10 @@ implementation {
         Hdr = &HerpMsg->header;
         header_init(Hdr, OpType, Info);
 
-        HerpMsg->data.path.prev = Hop->node;
-        HerpMsg->data.path.hop_count = Hop->hop_count;
+        HerpMsg->data.path.prev = TOS_NODE_ID;
+        HerpMsg->data.path.hop_count = HopCount + 1;
 
-        RetVal = call Send.send(Hop->node, New, sizeof(herp_msg_t));
+        RetVal = call Send.send(Next, New, sizeof(herp_msg_t));
         if (RetVal != SUCCESS) {
             call MsgPool.put(New);
         }
@@ -184,24 +182,23 @@ implementation {
         return RetVal;
     }
 
-    command error_t Protocol.fwd_explore (const herp_opinfo_t *Info, const herp_proto_t *Hop) {
-        return path_forward(Info, PATH_EXPLORE, Hop);
+    command error_t Protocol.fwd_explore (const herp_opinfo_t *Info, am_addr_t Next, uint16_t HopsFromSrc) {
+        return path_forward(Info, PATH_EXPLORE, Next, HopsFromSrc);
     }
 
-    command error_t Protocol.fwd_build (const herp_opinfo_t *Info, const herp_proto_t *Hop) {
-        return path_forward(Info, PATH_BUILD, Hop);
+    command error_t Protocol.fwd_build (const herp_opinfo_t *Info, am_addr_t Prev, uint16_t HopsFromDst) {
+        return path_forward(Info, PATH_BUILD, Prev, HopsFromDst);
     }
 
-    command error_t Protocol.fwd_payload (const herp_opinfo_t *Info, am_addr_t Next, const herp_userdata_t *Data) {
-        message_t *New;
+    command error_t Protocol.fwd_payload (const herp_opinfo_t *Info, am_addr_t Next, message_t *Msg, uint8_t Len) {
         error_t RetVal;
 
-        New = msg_dup(Data->msg);
-        if (New == NULL) return ENOMEM;
+        Msg = msg_dup(Msg);
+        if (Msg == NULL) return ENOMEM;
 
-        RetVal = call Send.send(Next, New, Data->len);
+        RetVal = call Send.send(Next, Msg, Len);
         if (RetVal != SUCCESS) {
-            call MsgPool.put(New);
+            call MsgPool.put(Msg);
         }
 
         return RetVal;

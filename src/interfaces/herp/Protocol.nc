@@ -14,20 +14,6 @@ interface Protocol {
     command error_t send_build (herp_opid_t OpId, const herp_opinfo_t *Info,
                                 am_addr_t BackHop);
 
-    /** Send a message through the given first hop
-     *
-     * The message must be pre-initialized with init_user_msg()
-     *
-     * @param[in] Msg The message to send;
-     * @param[in] MsgLen The length of the message;
-     * @param[in] FirstHop The first node of the path.
-     *
-     * @retval The same as AMSend.send() on success;
-     * @retval ENOMEM if there are not enough resources to send the message.
-     */
-    command error_t send_data (message_t *Msg, uint8_t MsgLen,
-                               am_addr_t FirstHop);
-
     /** Initialize user payload message
      *
      * This function must be called on the user message in order to store
@@ -43,18 +29,38 @@ interface Protocol {
     command error_t init_user_msg (message_t *Msg, herp_opid_t OpId,
                                    am_addr_t Target);
 
+    /** Send a message through the given first hop
+     *
+     * The message must be pre-initialized with init_user_msg()
+     *
+     * @param[in] Msg The message to send;
+     * @param[in] MsgLen The length of the message;
+     * @param[in] FirstHop The first node of the path.
+     *
+     * @retval The same as AMSend.send() on success;
+     * @retval ENOMEM if there are not enough resources to send the message.
+     */
+    command error_t send_data (message_t *Msg, uint8_t MsgLen,
+                               am_addr_t FirstHop);
+
     event void done(herp_opid_t OpId, error_t E);
 
-    event void got_explore (const herp_opinfo_t *Info, const herp_proto_t *Data);
+    event void got_explore (const herp_opinfo_t *Info, am_addr_t Prev,
+                            uint16_t HopsFromSrc);
 
-    command error_t fwd_explore (const herp_opinfo_t *Info, const herp_proto_t *Hop);
+    command error_t fwd_explore (const herp_opinfo_t *Info, am_addr_t Next,
+                                 uint16_t HopsFromSrc);
 
-    event void got_build (const herp_opinfo_t *Info, const herp_proto_t *Data);
+    event void got_build (const herp_opinfo_t *Info, am_addr_t Prev,
+                          uint16_t HopsFromDst);
 
-    command error_t fwd_build (const herp_opinfo_t *Info, const herp_proto_t *Hop);
+    command error_t fwd_build (const herp_opinfo_t *Info, am_addr_t Prev,
+                               uint16_t HopsFromDst);
 
-    event const herp_userdata_t* got_payload (const herp_opinfo_t *Info, const herp_userdata_t *Data);
+    event message_t * got_payload (const herp_opinfo_t *Info,
+                                   message_t *Msg, uint8_t Len);
 
-    command error_t fwd_payload (const herp_opinfo_t *Info, am_addr_t Next, const herp_userdata_t *Data);
+    command error_t fwd_payload (const herp_opinfo_t *Info, am_addr_t Next, 
+                                 message_t *Msg, uint8_t Len);
 
 }

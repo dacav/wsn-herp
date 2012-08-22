@@ -21,7 +21,11 @@ implementation {
         ActiveMessageC,
         ProtocolP;
 
-    ProtocolP.Send -> AMSenderC;
+    components SendDebugP;
+
+    SendDebugP -> AMSenderC.AMSend;
+    ProtocolP.Send -> SendDebugP;
+
     ProtocolP.Receive -> AMReceiverC;
     ProtocolP.SubPacket -> AMSenderC;
     ProtocolP.MsgPool -> PoolC;
