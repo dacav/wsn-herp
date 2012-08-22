@@ -26,9 +26,8 @@ implementation {
     static message_t * msg_dup (const message_t *Orig);
     static inline herp_msg_t * msg_unwrap (message_t *Msg, uint8_t Len);
     static inline void msg_copy (message_t *Dst, const message_t *Src);
-    static void forward (message_t * Msg, uint8_t Len, am_addr_t To);
-    static void header_init (header_t *Hdr, op_t OpType, herp_opid_t OpId,
-                             am_addr_t To);
+    static inline void header_init (header_t *Hdr, op_t OpType,
+                                    const herp_opinfo_t *Info);
 
     /* ---------------------------------------------------------------- */
 
@@ -38,15 +37,20 @@ implementation {
         herp_msg_t *HerpMsg;
         error_t RetVal;
         header_t *Hdr;
+        herp_opinfo_t Info = {
+            .ext_opid OpId,
+            .from = TOS_NODE_ID,
+            .to = Target
+        };
 
         New = call MsgPool.get();
         if (New == NULL) return ENOMEM;
 
         HerpMsg = msg_unwrap(New, sizeof(herp_msg_t));
         Hdr = &HerpMsg->header;
-        header_init(Hdr, PATH_EXPLORE, OpId, Target);
+        header_init(Hdr, PATH_EXPLORE, &Info);
 
-        HerpMsg->data.path.hop_count = 0;
+        HerpMsg->data.path.hop_count = 1;
         HerpMsg->data.path.prev = TOS_NODE_ID;
 
         RetVal = call Send.send(FirstHop, New, sizeof(herp_msg_t));
@@ -74,10 +78,9 @@ implementation {
 
         HerpMsg = msg_unwrap(New, sizeof(herp_msg_t));
         Hdr = &HerpMsg->header;
-        header_init(Hdr, PATH_BUILD, Info->ext_opid, Info->to);
-        Hdr->from = Info->from;
+        header_init(Hdr, PATH_BUILD, Info);
 
-        HerpMsg->data.path.hop_count = 0;
+        HerpMsg->data.path.hop_count = 1;
         HerpMsg->data.path.prev = TOS_NODE_ID;
 
         RetVal = call Send.send(BackHop, New, sizeof(herp_msg_t));
@@ -88,30 +91,31 @@ implementation {
         return RetVal;
     }
 
-    command error_t init_user_msg (message_t *Msg, herp_opid_t OpId,
-                                   am_addr_t Target) {
+    command error_t Protocol.init_user_msg (message_t *Msg, herp_opid_t OpId,
+                                            am_addr_t Target) {
         herp_msg_t *HerpMsg;
         header_t *Hdr;
+        herp_opinfo_t Info = {
+            .ext_opid = OpId,
+            .from = TOS_NODE_ID,
+            .to = Target
+        };
 
-        HerpMsg = msg_unwrap(sizeof(header_t));
+        HerpMsg = msg_unwrap(Msg, sizeof(header_t));
         if (HerpMsg == NULL) return FAIL;
 
-        Hdr = &Herp_msg->header;
-        header_init(Hdr, USER_DATA, OpId, Target);
+        Hdr = &HerpMsg->header;
+        header_init(Hdr, USER_DATA, &Info);
 
         return SUCCESS;
     }
 
     command error_t Protocol.send_data (message_t *Msg, uint8_t MsgLen,
                                         am_addr_t FirstHop) {
-        herp_msg_t *HerpMsg;
         error_t RetVal;
-        header_t *Hdr;
 
         Msg = msg_dup(Msg);
-        if (Msg == NULL) {
-            return ENOMEM;
-        }
+        if (Msg == NULL) return ENOMEM;
         MsgLen += sizeof(header_t);
 
         call SubPacket.setPayloadLength(Msg, MsgLen);
@@ -127,8 +131,6 @@ implementation {
         herp_msg_t *HerpMsg = (herp_msg_t *) Payload;
         herp_opinfo_t Info;
         op_t Type;
-        const am_addr_t *NextHop;
-        message_t *Fwd;
 
         Info.ext_opid = HerpMsg->header.op.id;
         Info.from = HerpMsg->header.from;
@@ -137,27 +139,72 @@ implementation {
         Type = HerpMsg->header.op.type;
         if (Type == USER_DATA) {
             herp_userdata_t Data = {
-                .bytes = HerpMsg->data.user_payload,
-                .len = Len - sizeof(header_t)
+                .msg    = Msg,
+                .len    = Len - sizeof(header_t)
             };
 
-            NextHop = signal Protocol.got_payload(&Info, &Data);
+            signal Protocol.got_payload(&Info, &Data);
         } else {
             herp_proto_t Proto = {
-                .prev = HerpMsg->data.path.prev,
-                .hop_count = HerpMsg->data.path.hop_count
+                .node       = HerpMsg->data.path.prev,
+                .hop_count  = HerpMsg->data.path.hop_count
             };
 
             if (Type == PATH_EXPLORE) {
-                NextHop = signal Protocol.got_explore(&Info, &Proto);
+                signal Protocol.got_explore(&Info, &Proto);
             } else {
-                NextHop = signal Protocol.got_build(&Info, &Proto);
+                signal Protocol.got_build(&Info, &Proto);
             }
         }
 
-        if (NextHop) forward(Msg, Type, *NextHop);
-
         return Msg;
+    }
+
+    static error_t path_forward (const herp_opinfo_t *Info, op_t OpType, const herp_proto_t *Hop) {
+        message_t *New;
+        herp_msg_t *HerpMsg;
+        error_t RetVal;
+        header_t *Hdr;
+
+        New = call MsgPool.get();
+        if (New == NULL) return ENOMEM;
+
+        HerpMsg = msg_unwrap(New, sizeof(herp_msg_t));
+        Hdr = &HerpMsg->header;
+        header_init(Hdr, OpType, Info);
+
+        HerpMsg->data.path.prev = Hop->node;
+        HerpMsg->data.path.hop_count = Hop->hop_count;
+
+        RetVal = call Send.send(Hop->node, New, sizeof(herp_msg_t));
+        if (RetVal != SUCCESS) {
+            call MsgPool.put(New);
+        }
+
+        return RetVal;
+    }
+
+    command error_t Protocol.fwd_explore (const herp_opinfo_t *Info, const herp_proto_t *Hop) {
+        return path_forward(Info, PATH_EXPLORE, Hop);
+    }
+
+    command error_t Protocol.fwd_build (const herp_opinfo_t *Info, const herp_proto_t *Hop) {
+        return path_forward(Info, PATH_BUILD, Hop);
+    }
+
+    command error_t Protocol.fwd_payload (const herp_opinfo_t *Info, am_addr_t Next, const herp_userdata_t *Data) {
+        message_t *New;
+        error_t RetVal;
+
+        New = msg_dup(Data->msg);
+        if (New == NULL) return ENOMEM;
+
+        RetVal = call Send.send(Next, New, Data->len);
+        if (RetVal != SUCCESS) {
+            call MsgPool.put(New);
+        }
+
+        return RetVal;
     }
 
     event void Send.sendDone (message_t *Msg, error_t E) {
@@ -209,12 +256,12 @@ implementation {
         return (herp_msg_t *) call SubPacket.getPayload(Msg, Len);
     }
 
-    static void header_init (header_t *Hdr, op_t OpType, herp_opid_t OpId,
-                             am_addr_t To) {
+    static inline void header_init (header_t *Hdr, op_t OpType,
+                                    const herp_opinfo_t *Info) {
         Hdr->op.type = OpType;
-        Hdr->op.id = OpId;
-        Hdr->from = TOS_NODE_ID;
-        Hdr->to = To;
+        Hdr->op.id = Info->ext_opid;
+        Hdr->from = Info->from;
+        Hdr->to = Info->to;
     }
 
     static inline void msg_copy (message_t *Dst, const message_t *Src) {
@@ -228,27 +275,6 @@ implementation {
         if (Ret == NULL) return NULL;
         msg_copy(Ret, Orig);
         return Ret;
-    }
-
-    static void forward (message_t * Msg, uint8_t Len, am_addr_t To) {
-        herp_msg_t *HerpMsg;
-
-        Msg = msg_dup(Msg);
-        HerpMsg = msg_unwrap(Msg, Len);
-        if (HerpMsg == NULL) return;
-
-        switch (HerpMsg->header.op.type) {
-            case PATH_EXPLORE:
-            case PATH_BUILD:
-                HerpMsg->data.path.hop_count ++;
-                HerpMsg->data.path.prev = TOS_NODE_ID;
-            case USER_DATA:
-                break;
-        }
-
-        if (call Send.send(To, Msg, Len) != SUCCESS) {
-            call MsgPool.put(Msg);
-        }
     }
 
 }

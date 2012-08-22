@@ -45,27 +45,16 @@ interface Protocol {
 
     event void done(herp_opid_t OpId, error_t E);
 
-    /**
-     *
-     * @retval NULL for <i>don't forward</i>;
-     * @retval AM_BROADCAST_ADDR for <i>forward broadcast</i>;
-     * @retval AM_BROADCAST_ADDR for <i>forward to a specific node</i>.
-     */
-    event const am_addr_t * got_explore (const herp_opinfo_t *Info,
-                                         const herp_proto_t *Data);
-    /**
-     *
-     * @retval NULL for <i>don't forward</i>;
-     * @retval an address for forwarding
-     */
-    event const am_addr_t * got_build (const herp_opinfo_t *Info,
-                                       const herp_proto_t *Data);
-    /**
-     *
-     * @retval The next hop if the message is not for the current node;
-     * @retval NULL if the message must not be propagated.
-     */
-    event const am_addr_t * got_payload (const herp_opinfo_t *Info,
-                                         const herp_userdata_t *Data);
+    event void got_explore (const herp_opinfo_t *Info, const herp_proto_t *Data);
+
+    command error_t fwd_explore (const herp_opinfo_t *Info, const herp_proto_t *Hop);
+
+    event void got_build (const herp_opinfo_t *Info, const herp_proto_t *Data);
+
+    command error_t fwd_build (const herp_opinfo_t *Info, const herp_proto_t *Hop);
+
+    event const herp_userdata_t* got_payload (const herp_opinfo_t *Info, const herp_userdata_t *Data);
+
+    command error_t fwd_payload (const herp_opinfo_t *Info, am_addr_t Next, const herp_userdata_t *Data);
 
 }
