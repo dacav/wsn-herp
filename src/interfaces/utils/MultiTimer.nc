@@ -26,7 +26,7 @@ interface MultiTimer <event_data_t>
      * @warn After an Event has been fired, the associated Schedule Item
      *             (sched_item_t) must not be used.
      *
-     * @param D The data for the Event, as specified in schedule().
+     * @param[in] D The data for the Event, as specified in schedule().
      */
     event void fired (event_data_t *D);
 
