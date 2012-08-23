@@ -3,7 +3,6 @@
 
 #include <message.h>
 
-#include <Routing.h>
 #include <RoutingTable.h>
 #include <Protocol.h>
 
@@ -25,7 +24,7 @@ typedef enum {
 
 } op_phase_t;
 
-struct herp_routing {
+typedef struct {
     uint8_t retry;
 
     struct {
@@ -46,7 +45,7 @@ struct herp_routing {
             am_addr_t target;
         } route;
     } data;
-};
+} * herp_routing_t;
 
 #endif // ROUTING_PRIV_H
 
