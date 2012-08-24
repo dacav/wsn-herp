@@ -136,8 +136,6 @@ implementation {
         Info.from = HerpMsg->header.from;
         Info.to = HerpMsg->header.to;
 
-        dbg("Out", "Received\n");
-
         Type = HerpMsg->header.op.type;
         if (Type == USER_DATA) {
 

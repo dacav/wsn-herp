@@ -5,6 +5,7 @@ generic configuration ProtocolC (uint8_t MSG_POOL_SIZE, am_id_t AM_ID) {
 
     provides {
         interface Protocol;
+        interface TimerDelay;
 
         interface SplitControl as AMControl;
         interface Packet;
@@ -18,11 +19,13 @@ implementation {
         new AMSenderC(AM_ID),
         new AMReceiverC(AM_ID),
         new PoolC(message_t, MSG_POOL_SIZE),
+        new TimerMilliC(),
+        StatAMSendC,
         ActiveMessageC,
         ProtocolP;
 
-    ProtocolP.Send -> AMSenderC.AMSend;
-
+    StatAMSendC.SubAMSend -> AMSenderC;
+    ProtocolP.Send -> StatAMSendC;
     ProtocolP.Receive -> AMReceiverC;
     ProtocolP.SubPacket -> AMSenderC;
     ProtocolP.MsgPool -> PoolC;
@@ -30,5 +33,6 @@ implementation {
     AMControl = ActiveMessageC;
     Protocol = ProtocolP;
     Packet = ProtocolP;
+    TimerDelay = StatAMSendC;
 
 }
