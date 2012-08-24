@@ -9,7 +9,7 @@ typedef struct herp_rtroute * herp_rtroute_t;
 
 typedef struct {
     am_addr_t first_hop;
-    uint16_t n_hops;
+    uint8_t n_hops;
 } herp_rthop_t;
 
 typedef enum {
