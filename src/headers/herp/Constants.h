@@ -8,6 +8,8 @@
 #define HERP_TIME_DEV_BETA  0.95
 #define HERP_TIME_DEV_MULT  2
 
+#define HERP_TOPO_MAX_DIAM  7
+
 /* Time constants (all expressed in milliseconds) */
 #define HERP_DEFAULT_RTT    500 /* TODO: set reasonable value */
 #define HERP_MAX_RETRY      3   /* After 3 failures give up */

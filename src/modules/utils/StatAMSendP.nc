@@ -46,6 +46,14 @@ implementation {
                     + HERP_TIME_DEV_MULT * Stats.est.diff);
     }
 
+    command uint32_t TimerDelay.for_any_node () {
+        /* This is yielded just as based on static maximum diameter
+         * of the network (see `Constants.h`). This is for sake of
+         * simplicity.
+         */
+        return TimerDelay.for_hops(HERP_TOPO_MAX_DIAM);
+    }
+
     static void compute_stats () {
         uint32_t T = call Timer.getNow() - Stats.send_time;
 
