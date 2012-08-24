@@ -4,7 +4,7 @@
 interface RoutingTable {
 
     /** Require the next hop for a certain Node.
-     *  
+     *
      * If the Node is registered into the Routing Table this will trigger
      * the signaling of the deliver() event and the command will return
      * herp_rtres_t::HERP_RT_SUBSCRIBED.
@@ -36,18 +36,69 @@ interface RoutingTable {
      */
     command herp_rtres_t get_route (am_addr_t Node, herp_rtentry_t *Out);
 
+    /** Retrieve the job of the given Entry
+     *
+     * Each entry corresponds to multiple routes. If the get_route()
+     * command returned herp_rtres_t::HERP_RT_VERIFY, then it also yielded
+     * a Route as output parameter. This function fetches the Entry which
+     * requires the job from the route.
+     *
+     * @param[in] Entry The entry to be searched for job.
+     *
+     * @retval The pointer to the Entry's internal route.
+     * @retval NULL if there's no such job.
+     */
     command herp_rtroute_t get_job (herp_rtentry_t Entry);
 
+    /**
+     *
+     * @retval herp_rtres_t::HERP_RT_SUCCESS on success.
+     * @retval herp_rtres_t::HERP_RT_ERROR if the route was not waiting
+     *         for a job;
+     */
     command herp_rtres_t drop_job (herp_rtroute_t Route);
 
+    /**
+     *
+     * @param[in] The Route.
+     *
+     * @retval The Hop stored inside the Route.
+     */
     command const herp_rthop_t * get_hop (const herp_rtroute_t Route);
 
+    /**
+     *
+     * In case of success the caller will be subscribed to the operation
+     * (eventually deliver() will be signaled).
+     *
+     * @retval herp_rtres_t::HERP_RT_SUBSCRIBED on success;
+     * @retval herp_rtres_t::HERP_RT_ERROR on failure.
+     */
 	command herp_rtres_t update_route (herp_rtroute_t Route, const herp_rthop_t *Hop);
 
+    /**
+     *
+     * @retval herp_rtres_t::SUCCESS on success;
+     * @retval herp_rtres_t::HERP_RT_ERROR on failure (the Route was
+     *         not owned as job by the caller or invalid).
+     */
     command herp_rtres_t drop_route (herp_rtroute_t Route);
 
+    /**
+     *
+     * In case of success the caller will be subscribed to the operation
+     * (eventually deliver() will be signaled).
+     *
+     * @retval herp_rtres_t::HERP_RT_SUBSCRIBED on success;
+     * @retval herp_rtres_t::HERP_RT_ERROR on failure.
+     */
 	command herp_rtres_t new_route (am_addr_t Node, const herp_rthop_t *Hop);
 
+    /**
+     *
+     * @param[in] Outcome herp_rtres_t::HERP_RT_SUCCESS or
+     *            herp_rtres_t::HERP_RT_RETRY.
+     */
     event void deliver (herp_rtres_t Outcome, am_addr_t Node, const herp_rthop_t *Hop);
 
 }
