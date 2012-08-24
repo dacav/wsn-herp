@@ -7,32 +7,27 @@
 #include <Protocol.h>
 
 typedef enum {
-    LOCAL = 0,
-    REMOTE = 1
+    SEND    = 0,
+    ROUTE   = 1,
+    PAYLOAD = 2
 } op_type_t;
 
 typedef enum {
-
-    /* -- For local operations -- */
-    START,
-    EXPLORE_SENDING,
-    EXPLORE_SENT,
-    WAIT_ROUTE,
-    EXEC_TASK,
-
-    STOP
-
+    START           = 0,
+    EXPLORE_SENDING = 1,
+    EXPLORE_SENT    = 2,
+    WAIT_ROUTE      = 3,
+    WAIT_TASK       = 4
 } op_phase_t;
 
-typedef struct {
-    uint8_t retry;
-
+typedef struct route_state {
     struct {
-        uint8_t type : 1;
-        uint8_t phase : 7;
+        uint8_t type    : 2;    // op_type_t
+        uint8_t phase   : 6;    // op_phase_t
     } op;
 
     herp_rtroute_t job;
+    sched_item_t sched;
 
     union {
         struct {
@@ -41,11 +36,17 @@ typedef struct {
         } send;
         struct {
             am_addr_t prev;
-            uint16_t hops_from_src;
+            uint16_t hops_from_src;  // <- useful for choice of best prev
             am_addr_t target;
         } route;
-    } data;
-} * herp_routing_t;
+        struct {
+            message_t *msg;
+            uint8_t len;
+            herp_opinfo_t info;
+        } payload;
+    };
+
+} * route_state_t;
 
 #endif // ROUTING_PRIV_H
 
