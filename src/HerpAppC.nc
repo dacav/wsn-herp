@@ -1,22 +1,18 @@
- #include "herp.h"
+
+ #include <Protocol.h>
 
 configuration HerpAppC {}
 
 implementation {
 
     components MainC, HerpC;
-    components new AMSenderC(HERP_MSG);
-    components new AMReceiverC(HERP_MSG);
-    components new TimerMilliC() as Timer;
-    components ActiveMessageC;
+    components new RoutingC(5);
 
+    HerpC.Send -> RoutingC;
+    HerpC.Receive -> RoutingC;
     HerpC -> MainC.Boot;
-    HerpC.Receive -> AMReceiverC;
-    HerpC.Send -> AMSenderC;
-    HerpC.RadioControl -> ActiveMessageC;
-    HerpC.Timer -> Timer;
-    HerpC.Packet -> AMSenderC;
-    HerpC.AMPacket -> AMSenderC;
+    HerpC.Radio -> RoutingC;
+    HerpC.Packet -> RoutingC;
 
 }
 

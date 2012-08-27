@@ -5,9 +5,10 @@
 
 #include <RoutingTable.h>
 #include <Protocol.h>
+#include <MultiTimer.h>
 
 typedef enum {
-    NEW     = 0
+    NEW     = 0,
     SEND    = 1,
     EXPLORE = 2,
     PAYLOAD = 3

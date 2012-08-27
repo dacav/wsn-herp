@@ -49,9 +49,9 @@ implementation {
     }
 
     event void IntMap.value_dispose (const herp_opid_t *K, herp_oprec_t V) {
-        user_data Data = (user_data *) V->store;
+        user_data *Data = (user_data *) V->store;
 
-        call OpTab.data_dispose(Data);
+        signal OpTab.data_dispose(V, Data);
         call UserDataPool.put(Data);
         call OperationId.put(*K);
     }

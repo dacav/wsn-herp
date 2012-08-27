@@ -51,7 +51,7 @@ implementation {
          * in the network (see `Constants.h`). This is for sake of
          * simplicity.
          */
-        return TimerDelay.for_hops(HERP_MAX_NODES);
+        return call TimerDelay.for_hops(HERP_MAX_NODES);
     }
 
     static void compute_stats () {

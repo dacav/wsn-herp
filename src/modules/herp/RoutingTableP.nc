@@ -79,7 +79,7 @@ implementation {
         return NULL;
     }
 
-    command herp_rtres_t HTab.drop_job [herp_opid_t OpId](herp_rtroute_t Route) {
+    command herp_rtres_t RTab.drop_job [herp_opid_t OpId](herp_rtroute_t Route) {
         if (!Route->ref->valid) {
             return HERP_RT_ERROR;
         }
@@ -191,7 +191,7 @@ implementation {
 
         for (i = 0; i < HERP_MAX_ROUTES; i ++) {
             herp_rtroute_t R = &Entry->routes[i];
-           
+
             if (R->sched != NULL) {
                 call MultiTimer.nullify(R->sched);
             }
@@ -199,8 +199,6 @@ implementation {
     }
 
     event void MultiTimer.fired (herp_rtroute_t Route) {
-        herp_rtentry_t Entry;
-
         Route->sched = NULL;
         switch (Route->state) {
             case BUILDING:
@@ -308,6 +306,8 @@ implementation {
                 case SEASONED:
                     if (!Out->seasoned) Out->seasoned = R;
                     break;
+                default:
+                    assert(0);
             }
         }
 
