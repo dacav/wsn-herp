@@ -213,6 +213,13 @@ implementation {
 
     }
 
+    static void explore_back_cand(route_state_t State, am_addr_t Prev, uint16_t HopsFromSrc) {
+        if (HopsFromSrc < State->explore.hops_from_src) {
+            State->explore.prev = Prev;
+            State->explore.hops_from_src = HopsFromSrc;
+        }
+    }
+
     static void explore_rtab_deliver (route_state_t State, const herp_opinfo_t *Info, const herp_rthop_t *Hop) {
         error_t E;
 
@@ -298,23 +305,26 @@ implementation {
     event void Prot.got_explore (const herp_opinfo_t *Info, am_addr_t Prev,
                                  uint16_t HopsFromSrc) {
         herp_oprec_t Op;
-        route_state_t RouteState;
+        route_state_t State;
 
         Op = call OpTab.external(Info->from, Info->ext_opid, FALSE);
         if (Op == NULL) return;
-        RouteState = call OpTab.fetch_user_data(Op);
+        State = call OpTab.fetch_user_data(Op);
 
-        switch (RouteState->op.type) {
+        switch (State->op.type) {
 
             case NEW:
-                assert(RouteState->op.phase == START);
-                RouteState->op.type = EXPLORE;
-                explore_start(RouteState, Info, Prev, HopsFromSrc);
+                assert(State->op.phase == START);
+                State->op.type = EXPLORE;
+                explore_start(State, Info, Prev, HopsFromSrc);
                 break;
 
             case EXPLORE:
+                explore_back_cand(State, Prev, HopsFromSrc);
                 break;
 
+            default:
+                assert(0);  // TODO: change. Mind Byzantine.
         }
 
     }
@@ -407,15 +417,14 @@ implementation {
         return call Packet.maxPayloadLength();
     }
 
-    /* -- WTF should I do here? -------------------------------------- */
-
     command error_t AMSend.cancel(message_t *Msg) {
         return FAIL;
     }
 
     event message_t * Prot.got_payload (const herp_opinfo_t *Info, message_t *Msg, uint8_t Len) {
 
-        // TODO: duplicate the message.
+
+
         return Msg;
     }
 
