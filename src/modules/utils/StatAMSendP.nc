@@ -47,11 +47,11 @@ implementation {
     }
 
     command uint32_t TimerDelay.for_any_node () {
-        /* This is yielded just as based on static maximum diameter
-         * of the network (see `Constants.h`). This is for sake of
+        /* This is yielded just as based on static maximum number of nodes
+         * in the network (see `Constants.h`). This is for sake of
          * simplicity.
          */
-        return TimerDelay.for_hops(HERP_TOPO_MAX_DIAM);
+        return TimerDelay.for_hops(HERP_MAX_NODES);
     }
 
     static void compute_stats () {
