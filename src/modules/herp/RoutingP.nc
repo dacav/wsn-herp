@@ -326,13 +326,16 @@ implementation {
     }
 
     static void prot_done (route_state_t State) {
-
         if (State->op.type == EXPLORE && State->explore.info.to == TOS_NODE_ID) {
             end_operation(State, SUCCESS);
         } else switch (State->op.phase) {
 
             case EXPLORE_SENDING:
                 wait_build(State);
+                break;
+
+            case EXEC_JOB:
+                end_operation(State, SUCCESS);
                 break;
 
             default:
@@ -358,7 +361,7 @@ implementation {
         call Timer.nullify(Comm->sched);
         Comm->sched = NULL;
 
-        if (Comm->job == NULL) {
+        if (Comm->job != NULL) {
             E = call RTab.update_route[OpId](Comm->job, &Hop);
             Comm->job = NULL;
         } else {

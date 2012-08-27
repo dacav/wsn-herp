@@ -85,6 +85,8 @@ implementation {
                 call BaseTimer.startOneShot(
                     nx->time - call BaseTimer.getNow()
                 );
+            } else if (call BaseTimer.isRunning()) {
+                call BaseTimer.stop();
             }
             sched = nx;
         } else {
