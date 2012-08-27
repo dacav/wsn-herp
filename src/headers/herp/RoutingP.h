@@ -30,13 +30,14 @@ typedef struct {
     struct comm_state comm;
     message_t *msg;
     uint8_t len;
+    am_addr_t target;
 } send_state_t;
 
 typedef struct {
     struct comm_state comm;
     am_addr_t prev;
     uint16_t hops_from_src;  // <- useful for choice of best prev
-    am_addr_t target;
+    herp_opinfo_t info;
 } explore_state_t;
 
 typedef struct {
@@ -46,6 +47,8 @@ typedef struct {
 } payload_state_t;
 
 typedef struct route_state {
+    uint8_t restart;
+
     struct {
         uint8_t type    : 2;    // op_type_t
         uint8_t phase   : 6;    // op_phase_t

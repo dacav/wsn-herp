@@ -112,15 +112,48 @@ implementation {
         }
     }
 
+    static void restart (route_state_t State) {
+        error_t Outcome;
+
+        if (State->restart == 0) {
+            end_operation(State, FAIL);
+        }
+        State->restart --;
+
+        state->op.phase = START;
+        switch (State->op.type) {
+
+            case SEND:
+                Outcome = send_fetch_route(State);
+                break;
+
+            case EXPLORE:
+                Outcome = explore_fetch_route(State);
+                break;
+
+            case PAYLOAD:
+                Outcome = payload_fetch_route(State);
+                break;
+
+            case NEW:
+            default:
+                assert(0);
+        }
+
+        if (Outcome != SUCCESS) {
+            end_operation(State, FAIL);
+        }
+    }
+
     /* -- Functions for "SEND" operations ---------------------------- */
 
-    static void send_fetch_route (route_state_t State, am_addr_t Target) {
+    static void send_fetch_route (route_state_t State) {
         herp_rtentry_t RT_Entry;
         herp_rtroute_t RT_Route;
         error_t RetVal;
         herp_opid_t OpId = State->int_opid;
 
-        switch (call RTab.get_route[OpId](Addr, &RT_Entry)) {
+        switch (call RTab.get_route[OpId](State->target, &RT_Entry)) {
 
             case HERP_RT_ERROR:
                 return FAIL;
@@ -145,7 +178,7 @@ implementation {
 
             case HERP_RT_REACH:
                 State->op.phase = EXPLORE_SENDING;
-                return call Prot.send_reach(OpId, Target);
+                return call Prot.send_reach(OpId, State->target);
 
             case HERP_RT_SUBSCRIBED:
                 State->op.phase = WAIT_ROUTE;
@@ -171,17 +204,12 @@ implementation {
 
     /* -- Functions for "EXPLORE" operations ---------------------------- */
 
-    static void explore_start (route_state_t State, const herp_opinfo_t *Info,
-                               am_addr_t Prev, uint16_t HopsFromSrc) {
-        herp_rtentry_t RT_Entry;
-        herp_rtroute_t RT_Route;
+    static error_t explore_fetch_route (route_state_t State) {
         herp_opid_t OpId;
         am_addr_t FwdTo;
+        herp_rtentry_t RT_Entry;
+        herp_rtroute_t RT_Route;
         error_t E;
-
-        State->explore.prev = Prev;
-        State->explore.hops_from_src = HopsFromSrc;
-        State->explore.target = Info->to;
 
         OpId = State->int_opid;
         FwdTo = AM_BROADCAST_ADDR;
@@ -220,6 +248,17 @@ implementation {
             end_operation(State, FAIL);
         }
 
+        return E;
+    }
+
+    static void explore_start (route_state_t State, const herp_opinfo_t *Info,
+                               am_addr_t Prev, uint16_t HopsFromSrc) {
+        State->op.type = EXPLORE;
+        State->explore.prev = Prev;
+        State->explore.hops_from_src = HopsFromSrc;
+        State->explore.info = *Info;
+
+        explore_fetch_route(State);
     }
 
     static void explore_back_cand(route_state_t State, am_addr_t Prev, uint16_t HopsFromSrc) {
@@ -259,6 +298,30 @@ implementation {
         close(State, E);
     }
 
+
+    static void payload_fetch_route (route_state_t State) {
+
+        herp_rtentry_t RT_Entry;
+        am_addr_t To = State->payload.info.to;
+
+        switch (call RTab.get_route[State->int_opid](To, &RT_Entry)) {
+
+            case HERP_RT_ERROR:
+            case HERP_RT_VERIFY:
+            case HERP_RT_REACH:
+                explore_close(State, FAIL);
+                break;
+
+            case HERP_RT_SUBSCRIBED:
+                State->op.phase = WAIT_ROUTE;
+                break;
+
+            default:
+                assert(0);
+
+        }
+    }
+
     /* -- Checked stuff ---------------------------------------------- */
 
     event error_t OpTab.data_init (const herp_oprec_t Op, route_state_t Routing) {
@@ -266,6 +329,7 @@ implementation {
          *       besides setting pointers to NULL.
          */
         memset((void *)Routing, 0, sizeof(struct herp_routing));
+        Routing->restart = HERP_MAX_RESTART;
         Routing->int_opid = call OpTab.fetch_internal_id(Op);
         return SUCCESS;
     }
@@ -294,10 +358,11 @@ implementation {
             call OpTab.free_record(Op);
             return RetVal;
         }
+        State->send.target = Addr;
         State->send.msg = Msg;
         State->send.len = Len;
 
-        RetVal = send_fetch_route(State, Addr);
+        RetVal = send_fetch_route(State);
         if (RetVal != SUCCESS) {
             call OpTab.free_record(Op);
         }
@@ -313,6 +378,7 @@ implementation {
                 State->explore.comm.sched = NULL;
                 break;
 
+            case NEW:
             case PAYLOAD:
             default:
                 assert(0);
@@ -333,13 +399,18 @@ implementation {
         switch (State->op.type) {
 
             case NEW:
+                /* New explore operation required */
                 assert(State->op.phase == START);
-                State->op.type = EXPLORE;
                 explore_start(State, Info, Prev, HopsFromSrc);
                 break;
 
             case EXPLORE:
+                /* Consider other explore messages having better path */
                 explore_back_cand(State, Prev, HopsFromSrc);
+                break;
+
+            case SEND:
+                /* Ignore explore messages sent by neighbors for us */
                 break;
 
             default:
@@ -355,7 +426,6 @@ implementation {
         Op = call OpTab.internal(OpId);
         assert(Op != NULL);
         State = call OpTab.fetch_user_data(Op);
-        assert(State->op.type != NEW);
 
         switch (State->op.type) {
 
@@ -369,6 +439,7 @@ implementation {
                 break;
 
             case PAYLOAD:
+            case NEW:
             default:
                 assert(0);
         }
@@ -385,6 +456,8 @@ implementation {
 
         assert(State->op.type != NEW);  // by construction
 
+        assert(State->op.type != PAYLOAD);  // TODO: byz, remove after testing
+
         if (State->op.type != PAYLOAD) {
             prot_got_build(State, Info, Prev, HopsFromDst);
         }
@@ -400,10 +473,7 @@ implementation {
         State = call OpTab.fetch_user_data(Op);
 
         if (Out == HERP_RT_RETRY) {
-            end_operation(State, ERETRY);
-            // TODO: fix this: retry automatically
-            // (note: it may be OK in SEND, but for EXPLORE and PAYLOAD
-            // This is a real crap!
+            restart(State);
         } else switch (State->op.type) {
 
             case SEND:
@@ -412,7 +482,7 @@ implementation {
 
             case EXPLORE:
                 Info.from = call OpTab.fetch_owner(Op);
-                assert(Node == State->route.target);
+                assert(Node == State->route.info.to);
                 Info.to = Node;
                 Info.ext_opid = call OpTab.fetch_external_id(Op);
                 explore_rtab_deliver(State, &Info, Node, Hop);
@@ -445,6 +515,8 @@ implementation {
         route_state_t State;
         message_t *MsgCopy;
 
+        if (call PayloadPool.empty()) return Msg;
+
         Op = call OpTab.external(Info->from, Info->ext_opid, FALSE);
         if (Op == NULL) return Msg;
 
@@ -452,35 +524,20 @@ implementation {
         // avoid messing with other operations:
         if (State->op.type != NEW) return Msg;
 
-        State->op.type = PAYLOAD;
-        switch (call RTab.get_route[OpId](Addr, &RT_Entry)) {
+        MsgCopy = msg_dup(Msg);
+        if (MsgCopy == NULL) {
+            end_operation(State, ENOMEM);
+        } else {
+            State->op.type = PAYLOAD;
+            State->payload.msg = MsgCopy;
+            State->payload.len = Len;
+            State->payload.info = *Info;
 
-            case HERP_RT_ERROR:
-            case HERP_RT_VERIFY:
-            case HERP_RT_REACH:
-                explore_close(State, FAIL);
-                return;
-
-            case HERP_RT_SUBSCRIBED:
-                State->op.phase = WAIT_ROUTE;
-                MsgCopy = msg_dup(Msg);
-                if (MsgCopy == NULL) {
-                    explore_close(State, ENOMEM);
-                } else {
-                    State->payload.msg = MsgCopy;
-                    State->payload.len = Len;
-                    State->payload.info = *Info;
-                }
-                return;
-
-            default:
-                assert(0);
+            payload_fetch_route(State);
         }
 
         return Msg;
     }
-
-
 
 }
 
