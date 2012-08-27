@@ -69,7 +69,10 @@ implementation {
     }
 
     static void prot_done (route_state_t State) {
-        switch (State->op.phase) {
+
+        if (State->op.type == EXPLORE && State->explore.info.to == TOS_NODE_ID) {
+            end_operation(State);
+        } else switch (State->op.phase) {
 
             case EXPLORE_SENDING:
                 wait_build(State);
@@ -202,7 +205,7 @@ implementation {
         }
     }
 
-    /* -- Functions for "EXPLORE" operations ---------------------------- */
+    /* -- Functions for "EXPLORE" operations -------------------------- */
 
     static error_t explore_fetch_route (route_state_t State) {
         herp_opid_t OpId;
@@ -258,7 +261,11 @@ implementation {
         State->explore.hops_from_src = HopsFromSrc;
         State->explore.info = *Info;
 
-        explore_fetch_route(State);
+        if (Info->target == TOS_NODE_ID) {
+            call Prot.send_build (State->int_opid, Info, Prev);
+        } else {
+            explore_fetch_route(State);
+        }
     }
 
     static void explore_back_cand(route_state_t State, am_addr_t Prev, uint16_t HopsFromSrc) {
@@ -277,7 +284,7 @@ implementation {
         end_operation(State, E);
     }
 
-    /* -- Functions for PAYLOAD operations -------------------------- */
+    /* -- Functions for PAYLOAD operations --------------------------- */
 
     static message_t * msg_dup (message_t *Src) {
         message_t *Ret;
@@ -511,29 +518,32 @@ implementation {
     }
 
     event message_t * Prot.got_payload (const herp_opinfo_t *Info, message_t *Msg, uint8_t Len) {
-        herp_oprec_t Op;
-        route_state_t State;
-        message_t *MsgCopy;
+        if (Info->to == TOS_NODE_ID) {
+            signal Receive.received(Msg, Len);
+        } else if (!call PayloadPool.empty()) {
+            herp_oprec_t Op;
 
-        if (call PayloadPool.empty()) return Msg;
+            Op = call OpTab.external(Info->from, Info->ext_opid, FALSE);
+            if (Op != NULL) {
+                message_t *MsgCopy;
+                route_state_t State;
 
-        Op = call OpTab.external(Info->from, Info->ext_opid, FALSE);
-        if (Op == NULL) return Msg;
+                State = call OpTab.fetch_user_data(Op);
+                // avoid messing with other operations:
+                if (State->op.type != NEW) return Msg;
 
-        State = call OpTab.fetch_user_data(Op);
-        // avoid messing with other operations:
-        if (State->op.type != NEW) return Msg;
+                MsgCopy = msg_dup(Msg);
+                if (MsgCopy == NULL) {
+                    end_operation(State, ENOMEM);
+                } else {
+                    State->op.type = PAYLOAD;
+                    State->payload.msg = MsgCopy;
+                    State->payload.len = Len;
+                    State->payload.info = *Info;
 
-        MsgCopy = msg_dup(Msg);
-        if (MsgCopy == NULL) {
-            end_operation(State, ENOMEM);
-        } else {
-            State->op.type = PAYLOAD;
-            State->payload.msg = MsgCopy;
-            State->payload.len = Len;
-            State->payload.info = *Info;
-
-            payload_fetch_route(State);
+                    payload_fetch_route(State);
+                }
+            }
         }
 
         return Msg;
