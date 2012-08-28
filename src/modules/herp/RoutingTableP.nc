@@ -355,7 +355,6 @@ implementation {
         if (Found.seasoned) return;
 
         /* Deallocation */
-        dbg("Out", "Table deallocation\n");
         call Table.get_del(&Entry->target);
     }
 
