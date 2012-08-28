@@ -24,9 +24,19 @@ implementation {
         ActiveMessageC,
         ProtocolP;
 
+#ifdef DUMP
+    components DumpAMP;
+
+    DumpAMP.SubAMSend -> AMSenderC;
+    DumpAMP.SubReceive -> AMReceiverC;
+    StatAMSendC.SubAMSend -> DumpAMP;
+    ProtocolP.Receive -> DumpAMP;
+#else
     StatAMSendC.SubAMSend -> AMSenderC;
-    ProtocolP.Send -> StatAMSendC;
     ProtocolP.Receive -> AMReceiverC;
+#endif
+
+    ProtocolP.Send -> StatAMSendC;
     ProtocolP.SubPacket -> AMSenderC;
     ProtocolP.MsgPool -> PoolC;
 
