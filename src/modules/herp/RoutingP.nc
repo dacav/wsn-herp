@@ -75,10 +75,11 @@ implementation {
         Comm = State->op.type == SEND ? &State->send.comm
              : State->op.type == EXPLORE ? &State->explore.comm
              : NULL;
-        assert(Comm != NULL);
 
-        assert(Comm->job == NULL);
-        assert(Comm->sched == NULL);
+        if (Comm) {
+            assert(Comm->job == NULL);
+            assert(Comm->sched == NULL);
+        }
     }
 
     command error_t AMSend.send(am_addr_t Addr, message_t *Msg, uint8_t Len) {
@@ -166,7 +167,11 @@ implementation {
     }
 
     event void Prot.done_remote (am_addr_t Own, herp_opid_t ExtOpId, error_t E) {
-        prot_done_demux(call OpTab.external(Own, ExtOpId, TRUE), E);
+        herp_oprec_t Op = call OpTab.external(Own, ExtOpId, TRUE);
+
+        if (Op != NULL) {
+            prot_done_demux(Op, E);
+        }
     }
 
     event void Prot.got_build (const herp_opinfo_t *Info, am_addr_t Prev, uint16_t HopsFromDst) {
@@ -278,10 +283,6 @@ implementation {
                 call PayloadPool.put(Msg);
             }
         }
-
-        assert(State->send.comm.job == NULL &&
-               State->send.comm.sched == NULL);
-
         call OpTab.free_internal(State->int_opid);
     }
 
