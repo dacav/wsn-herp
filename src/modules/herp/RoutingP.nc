@@ -568,7 +568,7 @@ implementation {
         error_t E;
 
         assert(State->op.phase == WAIT_ROUTE);
-        E = call Prot.fwd_payload(&State->payload.info, Hop->n_hops,
+        E = call Prot.fwd_payload(&State->payload.info, Hop->first_hop,
                                   State->payload.msg, State->payload.len);
         end_operation(State, E);
     }
