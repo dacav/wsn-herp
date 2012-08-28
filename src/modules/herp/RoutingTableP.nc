@@ -196,6 +196,11 @@ implementation {
                 call MultiTimer.nullify(R->sched);
             }
         }
+
+#ifdef DUMP
+        dbg("RTab", "No more routes for %d\n", Entry->target);
+        dbg("RTab", "--------------------------------------\n");
+#endif
     }
 
     event void MultiTimer.fired (herp_rtroute_t Route) {
@@ -203,10 +208,24 @@ implementation {
         switch (Route->state) {
             case BUILDING:
             case SEASONED:
+#ifdef DUMP
+                dbg("RTab", "Dead route for %d: <Node=%d, Hops=%d>\n",
+                    Route->ref->target,
+                    Route->hop.first_hop,
+                    Route->hop.n_hops);
+                dbg("RTab", "--------------------------------------\n");
+#endif
                 Route->state = DEAD;
                 enqueue(Route->ref);
                 break;
             case FRESH:
+#ifdef DUMP
+                dbg("RTab", "Seasoned route for %d: <Node=%d, Hops=%d>\n",
+                    Route->ref->target,
+                    Route->hop.first_hop,
+                    Route->hop.n_hops);
+                dbg("RTab", "--------------------------------------\n");
+#endif
                 mark_seasoned(Route);
                 break;
             default:
@@ -365,6 +384,12 @@ implementation {
         Route->state = FRESH;
         set_timer(Route, HERP_RT_TIME_FRESH);
         copy_hop(&Route->hop, Hop);
+
+#ifdef DUMP
+        dbg("RTab", "New route to %d: <Node=%d, Hops=%d>\n",
+            Route->ref->target, Hop->first_hop, Hop->n_hops);
+        dbg("RTab", "--------------------------------------\n");
+#endif
 
         Entry = Route->ref;
         return (subscribe(Entry, OpId) && enqueue(Entry));
