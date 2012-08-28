@@ -43,7 +43,9 @@ interface Protocol {
     command error_t send_data (message_t *Msg, uint8_t MsgLen,
                                am_addr_t FirstHop);
 
-    event void done(herp_opid_t OpId, error_t E);
+    event void done_local (herp_opid_t OpId, error_t E);
+
+    event void done_remote (am_addr_t Own, herp_opid_t ExtOpId, error_t E);
 
     event void got_explore (const herp_opinfo_t *Info, am_addr_t Prev,
                             uint16_t HopsFromSrc);
@@ -60,7 +62,7 @@ interface Protocol {
     event message_t * got_payload (const herp_opinfo_t *Info,
                                    message_t *Msg, uint8_t Len);
 
-    command error_t fwd_payload (const herp_opinfo_t *Info, am_addr_t Next, 
+    command error_t fwd_payload (const herp_opinfo_t *Info, am_addr_t Next,
                                  message_t *Msg, uint8_t Len);
 
 }

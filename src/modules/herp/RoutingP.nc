@@ -36,6 +36,7 @@ implementation {
                                 am_addr_t Prev, uint8_t HopsFromDst);
     static void restart (route_state_t State);
     static message_t * msg_dup (message_t *Src);
+    static void prot_done_demux (herp_oprec_t Op, error_t E);
 
     /* -- Functions for "SEND" operations ---------------------------- */
 
@@ -160,31 +161,12 @@ implementation {
 
     }
 
-    event void Prot.done(herp_opid_t OpId, error_t E) {
-        herp_oprec_t Op;
-        route_state_t State;
+    event void Prot.done_local (herp_opid_t OpId, error_t E) {
+        prot_done_demux(call OpTab.internal(OpId), E);
+    }
 
-        Op = call OpTab.internal(OpId);
-        assert(Op != NULL);
-        State = call OpTab.fetch_user_data(Op);
-
-        switch (State->op.type) {
-
-            case SEND:
-            case EXPLORE:
-                if (E == SUCCESS) {
-                    prot_done(State);
-                } else {
-                    end_operation(State, E);
-                }
-                break;
-
-            case PAYLOAD:
-            case NEW:
-            default:
-                assert(0);
-        }
-
+    event void Prot.done_remote (am_addr_t Own, herp_opid_t ExtOpId, error_t E) {
+        prot_done_demux(call OpTab.external(Own, ExtOpId, TRUE), E);
     }
 
     event void Prot.got_build (const herp_opinfo_t *Info, am_addr_t Prev, uint16_t HopsFromDst) {
@@ -322,7 +304,7 @@ implementation {
         }
 
         Comm->sched = call Timer.schedule(T, State);
-        State->op.phase = EXPLORE_SENT;
+        assert(Comm->sched != NULL);
     }
 
     static void prot_done (route_state_t State) {
@@ -331,6 +313,7 @@ implementation {
         } else switch (State->op.phase) {
 
             case EXPLORE_SENDING:
+                State->op.phase = EXPLORE_SENT;
                 wait_build(State);
                 break;
 
@@ -356,6 +339,7 @@ implementation {
              : State->op.type == EXPLORE ? &State->explore.comm
              : NULL;
         assert(Comm != NULL);
+        assert(State->op.phase == EXPLORE_SENT);
 
         assert(Comm->sched != NULL);
         call Timer.nullify(Comm->sched);
@@ -402,6 +386,32 @@ implementation {
                 assert(0);
         }
 
+    }
+
+    static void prot_done_demux (herp_oprec_t Op, error_t E) {
+        route_state_t State;
+
+        assert(Op != NULL);
+        State = call OpTab.fetch_user_data(Op);
+
+        switch (State->op.type) {
+
+            case SEND:
+            case EXPLORE:
+                if (E == SUCCESS) {
+                    prot_done(State);
+                } else {
+                    end_operation(State, E);
+                }
+                break;
+
+            case PAYLOAD:
+                break;
+
+            case NEW:
+            default:
+                assert(0);
+        }
     }
 
     /* -- Functions for "SEND" operations ---------------------------- */
@@ -519,7 +529,7 @@ implementation {
         State->explore.info = *Info;
 
         if (Info->to == TOS_NODE_ID) {
-            call Prot.send_build (State->int_opid, Info, Prev);
+            call Prot.send_build(State->int_opid, Info, Prev);
         } else {
             explore_fetch_route(State, HopsFromSrc);
         }
@@ -585,14 +595,6 @@ implementation {
 
         }
     }
-
-
-
-
-
-
-
-
 
 }
 

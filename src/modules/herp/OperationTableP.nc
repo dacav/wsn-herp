@@ -75,9 +75,7 @@ implementation {
         return SUCCESS;
     }
 
-    event void ExtMap.value_dispose (const herp_pair_t *K, herp_opid_t *V) {
-        call OpTab.free_external(K->node, K->ext_id);
-    }
+    event void ExtMap.value_dispose (const herp_pair_t *K, herp_opid_t *V) {}
 
     command herp_oprec_t OpTab.new_internal () {
         herp_opid_t Id;
@@ -129,19 +127,7 @@ implementation {
         }
     }
 
-    command void OpTab.free_record (herp_oprec_t Rec) {
-        if (Rec->owner == TOS_NODE_ID) {
-            assert(Rec->ids.internal == Rec->ids.external);
-            call OpTab.free_internal(Rec->ids.internal);
-        } else {
-            call OpTab.free_external(Rec->owner, Rec->ids.external);
-        }
-    }
-
     command void OpTab.free_internal (herp_opid_t IntOpId) {
-
-#define WITH_ASSERT
-#ifdef WITH_ASSERT
         hash_slot_t Slot;
         herp_oprec_t Rec;
 
@@ -149,15 +135,19 @@ implementation {
         if (Slot == NULL) return;
 
         Rec = call IntMap.item(Slot);
-        /* FIXME: if needed, find a way of automatically redirect
-         * non-internal records to free_external */
-        assert(Rec->owner == TOS_NODE_ID);
+        if (Rec->owner != TOS_NODE_ID) {
+            herp_pair_t ExtKey = {
+                .node = Rec->owner,
+                .ext_id = Rec->ids.external
+            };
+
+            call ExtMap.get_del(&ExtKey);
+        }
         call IntMap.del(Slot);
-#undef WITH_ASSERT
-#else
-        call IntMap.get_del(&IntOpId);
-#endif
-        call OperationId.put(IntOpId);
+    }
+
+    command void OpTab.free_record (herp_oprec_t Rec) {
+        call OpTab.free_internal(Rec->ids.internal);
     }
 
     command void OpTab.free_external (am_addr_t Owner,
@@ -166,19 +156,20 @@ implementation {
         if (Owner == TOS_NODE_ID) {
             call OpTab.free_internal(ExtOpId);
         } else {
-            herp_pair_t ExtKey;
             hash_slot_t Slot;
-
-            ExtKey.node = Owner;
-            ExtKey.ext_id = ExtOpId;
+            herp_pair_t ExtKey = {
+                .node = Owner,
+                .ext_id = ExtOpId
+            };
 
             Slot = call ExtMap.get(&ExtKey, FALSE);
             if (Slot != NULL) {
-                herp_opid_t *IntOpId;
+                herp_opid_t IntOpId;
 
-                IntOpId = call ExtMap.item(Slot);
-                call OpTab.free_internal(*IntOpId);
+                IntOpId = *(call ExtMap.item(Slot));
                 call ExtMap.del(Slot);
+
+                call OpTab.free_internal(IntOpId);
             }
         }
     }

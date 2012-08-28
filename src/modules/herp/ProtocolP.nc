@@ -214,7 +214,9 @@ implementation {
 
         if (From == TOS_NODE_ID) {
             /* This was an operation asked by the upper layer */
-            signal Protocol.done(OpId, E);
+            signal Protocol.done_local(OpId, E);
+        } else {
+            signal Protocol.done_remote(From, OpId, E);
         }
     }
 
