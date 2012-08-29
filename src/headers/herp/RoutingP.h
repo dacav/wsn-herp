@@ -11,7 +11,8 @@ typedef enum {
     NEW     = 0,
     SEND    = 1,
     EXPLORE = 2,
-    PAYLOAD = 3
+    PAYLOAD = 3,
+    COLLECT = 4
 } op_type_t;
 
 typedef enum {
@@ -51,8 +52,8 @@ typedef struct route_state {
     uint8_t restart;
 
     struct {
-        uint8_t type    : 2;    // op_type_t
-        uint8_t phase   : 6;    // op_phase_t
+        uint8_t type    : 4;    // op_type_t
+        uint8_t phase   : 4;    // op_phase_t
     } op;
 
     herp_opid_t int_opid;

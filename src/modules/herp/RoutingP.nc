@@ -179,15 +179,22 @@ implementation {
         route_state_t State;
 
         Op = call OpTab.external(Info->from, Info->ext_opid, TRUE);
-        if (Op == NULL) return;
+        if (Op == NULL) {
+            Op = call OpTab.new_internal();
+        }
         State = call OpTab.fetch_user_data(Op);
 
-        assert(State->op.type != NEW);  // by construction
+        switch (State->op.type) {
 
-        assert(State->op.type != PAYLOAD);  // TODO: byz, remove after testing
+            case PAYLOAD:
+                /* TODO: PAYLOAD may come from byzantine, don't assert! */
+                assert(0);
+                break;
 
-        if (State->op.type != PAYLOAD) {
-            prot_got_build(State, Info, Prev, HopsFromDst);
+            case NEW:
+                State->op.type = COLLECT;
+            default:
+                prot_got_build(State, Info, Prev, HopsFromDst);
         }
     }
 
@@ -214,6 +221,10 @@ implementation {
                 Info.to = Node;
                 Info.ext_opid = call OpTab.fetch_external_id(Op);
                 explore_rtab_deliver(State, &Info, Hop);
+                break;
+
+            case COLLECT:
+                end_operation(State, SUCCESS);
                 break;
 
             case PAYLOAD:
@@ -339,16 +350,20 @@ implementation {
         Comm = State->op.type == SEND ? &State->send.comm
              : State->op.type == EXPLORE ? &State->explore.comm
              : NULL;
-        assert(Comm != NULL);
-        assert(State->op.phase == EXPLORE_SENT);
 
-        assert(Comm->sched != NULL);
-        call Timer.nullify(Comm->sched);
-        Comm->sched = NULL;
+        if (Comm) {
+            assert(State->op.phase == EXPLORE_SENT);
 
-        if (Comm->job != NULL) {
-            E = call RTab.update_route[OpId](Comm->job, &Hop);
-            Comm->job = NULL;
+            assert(Comm->sched != NULL);
+            call Timer.nullify(Comm->sched);
+            Comm->sched = NULL;
+
+            if (Comm->job != NULL) {
+                E = call RTab.update_route[OpId](Comm->job, &Hop);
+                Comm->job = NULL;
+            } else {
+                E = call RTab.new_route[OpId](Info->to, &Hop);
+            }
         } else {
             E = call RTab.new_route[OpId](Info->to, &Hop);
         }
