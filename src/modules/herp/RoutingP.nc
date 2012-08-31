@@ -66,6 +66,9 @@ implementation {
         memset((void *)Routing, 0, sizeof(struct route_state));
         Routing->restart = HERP_MAX_RETRY;
         Routing->int_opid = call OpTab.fetch_internal_id(Op);
+
+        dbg("Rout", "New operation %d\n", Routing->int_opid);
+
         return SUCCESS;
     }
 
@@ -113,19 +116,25 @@ implementation {
     }
 
     event void Timer.fired (route_state_t State) {
+        comm_state_t Comm;
+
         switch (State->op.type) {
             case SEND:
-                State->send.comm.sched = NULL;
+                Comm = &State->send.comm;
                 break;
             case EXPLORE:
-                State->explore.comm.sched = NULL;
+                Comm = &State->explore.comm;
                 break;
 
             case NEW:
             case PAYLOAD:
+            case COLLECT:
             default:
                 assert(0);
         }
+
+        assert(Comm->sched != NULL);
+        Comm->sched = NULL;
 
         end_operation(State, FAIL);
     }
@@ -178,23 +187,24 @@ implementation {
         herp_oprec_t Op;
         route_state_t State;
 
-        Op = call OpTab.external(Info->from, Info->ext_opid, TRUE);
-        if (Op == NULL) {
-            Op = call OpTab.new_internal();
-        }
-        State = call OpTab.fetch_user_data(Op);
+        Op = call OpTab.external(Info->from, Info->ext_opid, FALSE);
+        if (Op != NULL) {
 
-        switch (State->op.type) {
+            State = call OpTab.fetch_user_data(Op);
 
-            case PAYLOAD:
-                /* TODO: PAYLOAD may come from byzantine, don't assert! */
-                assert(0);
-                break;
+            switch (State->op.type) {
 
-            case NEW:
-                State->op.type = COLLECT;
-            default:
-                prot_got_build(State, Info, Prev, HopsFromDst);
+                case PAYLOAD:
+                    /* TODO: PAYLOAD may come from byzantine, don't
+                     * assert! */
+                    assert(0);
+                    break;
+
+                case NEW:
+                    State->op.type = COLLECT;
+                default:
+                    prot_got_build(State, Info, Prev, HopsFromDst);
+            }
         }
     }
 
@@ -285,6 +295,8 @@ implementation {
     /* -- General purpose operation ---------------------------------- */
 
     static void end_operation (route_state_t State, error_t E) {
+
+        dbg("Rout", "End operation %d (OpType=%d)\n", State->int_opid, State->op.type);
 
         if (State->op.type == SEND) {
             signal AMSend.sendDone(State->send.msg, E);
