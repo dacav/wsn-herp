@@ -9,6 +9,9 @@
  #include <string.h>
  #include <assert.h>
 
+ #define SENDER_NODE    3
+ #define TARGET_NODE    5
+
 module HerpC {
 
     uses {
@@ -18,6 +21,8 @@ module HerpC {
         interface Packet;
         interface Receive;
     }
+
+    uses interface Timer<TMilli>;
 }
 
 implementation {
@@ -42,16 +47,21 @@ implementation {
 
     event void Radio.startDone (error_t Err) {
         dbg("Out", "Radio started\n");
-        if (TOS_NODE_ID == 0) {
-            const char Text[] = "Silvia ti amo <3";
-            void *Pay = call Packet.getPayload(&GlobMsg, sizeof(Text));
+        if (TOS_NODE_ID == SENDER_NODE) {
+            call Timer.startOneShot(512);
+        }
+    }
 
-            if (Pay == NULL) {
-                dbg("Out", "Oh shit, too small!\n");
-            } else {
-                memcpy(Pay, Text, sizeof(Text));
-                call Send.send(1, &GlobMsg, sizeof(Text));
-            }
+    event void Timer.fired () {
+        const char Text[] = "Silvia ti amo <3";
+        void *Pay = call Packet.getPayload(&GlobMsg, sizeof(Text));
+
+        dbg("Out", "Starting!\n");
+        if (Pay == NULL) {
+            dbg("Out", "Oh shit, too small!\n");
+        } else {
+            memcpy(Pay, Text, sizeof(Text));
+            call Send.send(TARGET_NODE, &GlobMsg, sizeof(Text));
         }
     }
 
