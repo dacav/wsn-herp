@@ -1,3 +1,6 @@
+
+ #include <AckAMSendP.h>
+
 generic configuration AckAMSendC (uint8_t TRACK_SIZE) {
 
     provides {
