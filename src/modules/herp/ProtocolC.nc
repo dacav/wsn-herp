@@ -20,19 +20,23 @@ implementation {
         new AMReceiverC(AM_ID),
         new PoolC(message_t, MSG_POOL_SIZE),
         new TimerMilliC(),
+        new AckAMSendC(MSG_POOL_SIZE),
         StatAMSendC,
         ActiveMessageC,
         ProtocolP;
 
+    AckAMSendC.SubAMSend -> AMSenderC;
+    AckAMSendC.PacketAcknowledgements -> AMSenderC;
+
 #ifdef DUMP
     components DumpAMP;
 
-    DumpAMP.SubAMSend -> AMSenderC;
+    DumpAMP.SubAMSend -> AckAMSendC;
     DumpAMP.SubReceive -> AMReceiverC;
     StatAMSendC.SubAMSend -> DumpAMP;
     ProtocolP.Receive -> DumpAMP;
 #else
-    StatAMSendC.SubAMSend -> AMSenderC;
+    StatAMSendC.SubAMSend -> AckAMSendC;
     ProtocolP.Receive -> AMReceiverC;
 #endif
 
