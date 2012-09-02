@@ -16,29 +16,34 @@ generic configuration ProtocolC (uint8_t MSG_POOL_SIZE, am_id_t AM_ID) {
 implementation {
 
     components
-        new AMSenderC(AM_ID),
         new AMReceiverC(AM_ID),
         new PoolC(message_t, MSG_POOL_SIZE),
         new TimerMilliC(),
-        new AckAMSendC(MSG_POOL_SIZE),
         StatAMSendC,
-        ActiveMessageC,
-        ProtocolP;
+        ProtocolP,
+        ActiveMessageC;
 
-    AckAMSendC.SubAMSend -> AMSenderC;
-    AckAMSendC.PacketAcknowledgements -> AMSenderC;
-    AckAMSendC.Packet -> AMSenderC;
-    AckAMSendC.AMPacket -> AMSenderC;
+#ifdef ACKED
+    components new AMSenderC(AM_ID) as RealAMSenderC,
+               new AckAMSendC(MSG_POOL_SIZE) as AMSenderC;
+
+    AMSenderC.SubAMSend -> RealAMSenderC;
+    AMSenderC.PacketAcknowledgements -> RealAMSenderC;
+    AMSenderC.Packet -> RealAMSenderC;
+    AMSenderC.AMPacket -> RealAMSenderC;
+#else
+    components new AMSenderC(AM_ID);
+#endif
 
 #ifdef DUMP
     components DumpAMP;
 
-    DumpAMP.SubAMSend -> AckAMSendC;
+    DumpAMP.SubAMSend -> AMSenderC;
     DumpAMP.SubReceive -> AMReceiverC;
     StatAMSendC.SubAMSend -> DumpAMP;
     ProtocolP.Receive -> DumpAMP;
 #else
-    StatAMSendC.SubAMSend -> AckAMSendC;
+    StatAMSendC.SubAMSend -> AMSenderC;
     ProtocolP.Receive -> AMReceiverC;
 #endif
 
