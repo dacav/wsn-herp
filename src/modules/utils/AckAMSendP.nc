@@ -12,6 +12,8 @@ module AckAMSendP {
 
     uses {
         interface AMSend as SubAMSend;
+        interface AMPacket;
+        interface Packet;
         interface PacketAcknowledgements as PacketAck;
         interface HashTable<message_t, send_info_t>;
         interface Queue<message_t *>;
@@ -25,12 +27,14 @@ implementation {
 
     event error_t HashTable.value_init (const message_t *Key, send_info_t *Val)
     {
-        Val->retry = HERP_MAX_ACK;
+        Val->retry = HERP_MAX_ACK < (1<<6) ? HERP_MAX_ACK : (1<<6) - 1;
         Val->to_check = 1;
         Val->fresh = 1;
 
         return SUCCESS;
     }
+
+    event void HashTable.value_dispose (const message_t *Key, send_info_t *Val) {}
 
     command error_t AMSend.cancel(message_t *Msg)
     {
@@ -105,9 +109,14 @@ implementation {
         hash_slot_t Slot;
         send_info_t *Info;
 
+        /* Store the information inside the message, so we can get
+         * it later (seriously, this mix of semantics is brain-damaged.
+         * What the hell were they thinking? */
+        call AMPacket.setDestination(Msg, Addr);
+        call Packet.setPayloadLength(Msg, Len);
+
         Slot = call HashTable.get(Msg, FALSE);
         if (Slot == NULL) return EBUSY;
-
         Info = call HashTable.item(Slot);
         Info->fresh = 0;
 
@@ -139,8 +148,6 @@ implementation {
 
                 Info->retry --;
                 Info->to_check = 1;
-                Info->to = Addr;
-                Info->len = Len;
 
                 EQueue = enqueue(Msg);
                 assert(EQueue == SUCCESS);
@@ -198,7 +205,13 @@ implementation {
         Info = call HashTable.item(Slot);
         assert(Info->to_check == 1 && Info->fresh == 0);
 
-        switch (E = call AMSend.send(Info->to, Msg, Info->len)) {
+        E = call AMSend.send(
+                call AMPacket.destination(Msg),
+                Msg,
+                call Packet.payloadLength(Msg)
+            );
+
+        switch (E) {
             case SUCCESS:
                 /* Eventually we'll get SubAMSend.sendDone ... */
                 break;
@@ -210,14 +223,30 @@ implementation {
         }
     }
 
-    event void HashTable.value_dispose (const message_t *Key, send_info_t *Val) {}
-
     event hash_index_t HashTable.key_hash (const message_t *Key) {
-        return (hash_index_t) (uintptr_t) Key;
+        return (hash_index_t) call AMPacket.destination((message_t *)Key);
     }
 
     event bool HashTable.key_equal (const message_t *Key1, const message_t *Key2) {
-        return Key1 == Key2;    // comparison by address
+        uint8_t Size1, Size2;
+
+        /* Why casting? Those "programmers" forgot to set as const the
+         * pointer which are not modified by the read-only calls! */
+        if (call AMPacket.destination((message_t *)Key1) !=
+            call AMPacket.destination((message_t *)Key2)) {
+            return FALSE;
+        }
+
+        Size1 = call Packet.payloadLength((message_t *)Key1);
+        Size2 = call Packet.payloadLength((message_t *)Key2);
+
+        if (Size1 != Size2) {
+            return FALSE;
+        }
+
+        return memcmp(call Packet.getPayload((message_t *)Key1, Size1),
+                      call Packet.getPayload((message_t *)Key2, Size2),
+                      Size1) == 0;
     }
 
 

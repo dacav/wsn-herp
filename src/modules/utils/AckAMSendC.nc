@@ -10,6 +10,8 @@ generic configuration AckAMSendC (uint8_t TRACK_SIZE) {
     uses {
         interface AMSend as SubAMSend;
         interface PacketAcknowledgements;
+        interface Packet;
+        interface AMPacket;
     }
 
 }
@@ -27,5 +29,7 @@ implementation {
 
     AckAMSendP.SubAMSend = SubAMSend;
     AckAMSendP.PacketAck = PacketAcknowledgements;
+    AckAMSendP.Packet = Packet;
+    AckAMSendP.AMPacket = AMPacket;
 
 }

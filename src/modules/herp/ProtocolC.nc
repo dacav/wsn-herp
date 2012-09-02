@@ -27,6 +27,8 @@ implementation {
 
     AckAMSendC.SubAMSend -> AMSenderC;
     AckAMSendC.PacketAcknowledgements -> AMSenderC;
+    AckAMSendC.Packet -> AMSenderC;
+    AckAMSendC.AMPacket -> AMSenderC;
 
 #ifdef DUMP
     components DumpAMP;
