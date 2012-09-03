@@ -36,14 +36,14 @@ implementation {
         UserData = call UserDataPool.get();
         if (UserData == NULL) return FAIL;
 
+        V->ids.external = V->ids.internal = *K;
+        V->store = (void *)UserData;
+        V->owner = TOS_NODE_ID;
+
         if (signal OpTab.data_init(V, UserData) != SUCCESS) {
             call UserDataPool.put(UserData);
             return FAIL;
         }
-
-        V->ids.external = V->ids.internal = *K;
-        V->store = (void *)UserData;
-        V->owner = TOS_NODE_ID;
 
         return SUCCESS;
     }
@@ -113,7 +113,11 @@ implementation {
             if (Slot == NULL) return NULL;
 
             IntOpId = call ExtMap.item(Slot);
-            Ret = call IntMap.get_item(IntOpId, FALSE);
+            Ret = call IntMap.get_item(IntOpId, MustExist);
+
+            // MustExist IMPLIES Slot != NULL
+            assert(!(MustExist && Slot == NULL));
+
             if (Ret == NULL) {
                 call ExtMap.del(Slot);
                 return NULL;
