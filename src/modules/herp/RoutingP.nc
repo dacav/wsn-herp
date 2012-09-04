@@ -246,7 +246,6 @@ implementation {
                 break;
 
             case COLLECT:
-                dbg("Out", "Collected!\n");
                 end_operation(State, SUCCESS);
                 break;
 
@@ -647,8 +646,6 @@ implementation {
         if (Op == NULL) return;
 
         State = call OpTab.fetch_user_data(Op);
-
-        dbg("Out", "Harvest with opid=%d\n", State->int_opid);
 
         State->op.type = COLLECT;
         if (call RTab.new_route[State->int_opid](Prev, &Hop) !=
