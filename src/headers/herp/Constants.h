@@ -7,7 +7,7 @@
 
 #define HERP_TIME_AVG_ALPHA 0.95
 #define HERP_TIME_DEV_BETA  0.95
-#define HERP_TIME_DEV_MULT  2
+#define HERP_TIME_DEV_MULT  4
 
 #define HERP_MAX_RETRY      3   /* After 3 failures give up */
 #define HERP_MAX_ACK        5
