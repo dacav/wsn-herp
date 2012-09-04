@@ -96,7 +96,6 @@ implementation {
 	command herp_rtres_t RTab.new_route [herp_opid_t OpId](am_addr_t Node, const herp_rthop_t *Hop) {
         herp_rtentry_t Entry;
         herp_rtroute_t Selected;
-        scan_t Found;
         int i;
 
         Entry = call Table.get_item(&Node, FALSE);
@@ -114,6 +113,8 @@ implementation {
         }
 
         if (Selected == NULL) {
+            scan_t Found;
+
             scan(Entry, &Found);
             Selected = Found.dead ? Found.dead
                      : Found.seasoned ? Found.seasoned

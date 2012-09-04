@@ -51,6 +51,8 @@ implementation {
     static void explore_back_cand(route_state_t State, am_addr_t Prev, uint16_t HopsFromSrc);
     static void explore_rtab_deliver (route_state_t State, const herp_opinfo_t *Info,
                                       const herp_rthop_t *Hop);
+    static void explore_continue (route_state_t State, const herp_opinfo_t *Info,
+                                  am_addr_t Prev, uint16_t HopsFromSrc);
 
     /* -- Functions for PAYLOAD operations ---------------------------- */
 
@@ -82,7 +84,10 @@ implementation {
 
         if (Comm) {
             assert(Comm->job == NULL);
-            assert(Comm->sched == NULL);
+
+            if (Comm->sched) {
+                call Timer.nullify(Comm->sched);
+            }
         }
     }
 
@@ -154,12 +159,23 @@ implementation {
             case NEW:
                 /* New explore operation required */
                 assert(State->op.phase == START);
+                State->explore.prev = Prev;
+                State->explore.hops_from_src = HopsFromSrc;
+                State->explore.info = *Info;
                 explore_start(State, Info, Prev, HopsFromSrc);
                 break;
 
             case EXPLORE:
-                /* Consider other explore messages having better path */
-                explore_back_cand(State, Prev, HopsFromSrc);
+                /* Consider:
+
+                   - If we are the target, other requests following
+                     different paths, but driven by the same operation;
+
+                   - Otherwise other explore messages having better path
+                     (so we'll choose the better path we can).
+
+                 */
+                explore_continue(State, Info, Prev, HopsFromSrc);
                 break;
 
             case SEND:
@@ -342,8 +358,11 @@ implementation {
     }
 
     static void prot_done (route_state_t State) {
-        if (State->op.type == EXPLORE && State->explore.info.to == TOS_NODE_ID) {
+        if (State->op.type == EXPLORE &&
+            State->explore.info.to == TOS_NODE_ID) {
+
             end_operation(State, SUCCESS);
+
         } else switch (State->op.phase) {
 
             case EXPLORE_SENDING:
@@ -373,8 +392,7 @@ implementation {
              : State->op.type == EXPLORE ? &State->explore.comm
              : NULL;
 
-        if (Comm) {
-            assert(State->op.phase == EXPLORE_SENT);
+        if (Comm && State->op.phase == EXPLORE_SENT) {
 
             assert(Comm->sched != NULL);
             call Timer.nullify(Comm->sched);
@@ -386,6 +404,7 @@ implementation {
             } else {
                 E = call RTab.new_route[OpId](Info->to, &Hop);
             }
+
         } else {
             E = call RTab.new_route[OpId](Info->to, &Hop);
         }
@@ -501,13 +520,15 @@ implementation {
         error_t E;
         assert(State->op.phase == WAIT_ROUTE);
 
-        E = call Prot.send_data(State->send.msg, State->send.len,
-                                Hop->first_hop);
-        if (E == SUCCESS) {
-            State->op.phase = EXEC_JOB;
-        } else {
-            end_operation(State, E);
+        if (State->op.phase == WAIT_ROUTE) {
+            E = call Prot.send_data(State->send.msg, State->send.len,
+                                    Hop->first_hop);
+            if (E == SUCCESS) {
+                State->op.phase = EXEC_JOB;
+                return;
+            }
         }
+        end_operation(State, E);
     }
 
     /* -- Functions for "EXPLORE" operations -------------------------- */
@@ -560,16 +581,25 @@ implementation {
     }
 
     static void explore_start (route_state_t State, const herp_opinfo_t *Info,
-                               am_addr_t Prev, uint16_t HopsFromSrc) {
+                               am_addr_t Prev, uint16_t HopsFromSrc)
+    {
         State->op.type = EXPLORE;
-        State->explore.prev = Prev;
-        State->explore.hops_from_src = HopsFromSrc;
-        State->explore.info = *Info;
 
         if (Info->to == TOS_NODE_ID) {
             call Prot.send_build(State->int_opid, Info, Prev);
         } else {
             explore_fetch_route(State, HopsFromSrc);
+        }
+    }
+
+    static void explore_continue (route_state_t State, const herp_opinfo_t *Info,
+                                  am_addr_t Prev, uint16_t HopsFromSrc)
+    {
+        if (Info->to == TOS_NODE_ID) {
+            call Prot.send_build(State->int_opid, Info, Prev);
+        } else {
+            explore_back_cand(State, Prev, HopsFromSrc);
+            end_operation(State, SUCCESS);
         }
     }
 
