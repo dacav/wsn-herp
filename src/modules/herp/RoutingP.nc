@@ -216,7 +216,7 @@ implementation {
 
             /* Note: this assertion fails in case of byzantine nodes!
              * Should be eliminated. */
-            assert(HopsFromDst == 1);
+            assert(HopsFromDst > 1);
         }
     }
 
