@@ -57,6 +57,9 @@ implementation {
     static void payload_rtab_deliver (route_state_t State, const herp_rthop_t *Hop);
     static void payload_fetch_route (route_state_t State);
 
+    /* -- Function for COLLECT operations ----------------------------- */
+    static void harvest_direct_route (am_addr_t Prev);
+
     /* -- Commands, events and stuff ---------------------------------- */
 
     event error_t OpTab.data_init (const herp_oprec_t Op, route_state_t Routing) {
@@ -66,8 +69,6 @@ implementation {
         memset((void *)Routing, 0, sizeof(struct route_state));
         Routing->restart = HERP_MAX_RETRY;
         Routing->int_opid = call OpTab.fetch_internal_id(Op);
-
-        dbg("Rout", "New operation %d\n", Routing->int_opid);
 
         return SUCCESS;
     }
@@ -206,6 +207,17 @@ implementation {
                     prot_got_build(State, Info, Prev, HopsFromDst);
             }
         }
+
+        if (Info->to != Prev) {
+            /* Optimization: when we get a build, we get an information on
+             * how to reach the desination of the operation, but also on
+             * how to reach the neighbor we're using as route. */
+            harvest_direct_route(Prev);
+
+            /* Note: this assertion fails in case of byzantine nodes!
+             * Should be eliminated. */
+            assert(HopsFromDst == 1);
+        }
     }
 
     event void RTab.deliver [herp_opid_t OpId](herp_rtres_t Out, am_addr_t Node, const herp_rthop_t *Hop) {
@@ -234,6 +246,7 @@ implementation {
                 break;
 
             case COLLECT:
+                dbg("Out", "Collected!\n");
                 end_operation(State, SUCCESS);
                 break;
 
@@ -295,8 +308,6 @@ implementation {
     /* -- General purpose operation ---------------------------------- */
 
     static void end_operation (route_state_t State, error_t E) {
-
-        dbg("Rout", "End operation %d (OpType=%d)\n", State->int_opid, State->op.type);
 
         if (State->op.type == SEND) {
             signal AMSend.sendDone(State->send.msg, E);
@@ -621,6 +632,28 @@ implementation {
             default:
                 assert(0);
 
+        }
+    }
+
+    static void harvest_direct_route (am_addr_t Prev) {
+        herp_oprec_t Op;
+        route_state_t State;
+        herp_rthop_t Hop = {
+            .first_hop = Prev,
+            .n_hops = 1
+        };
+
+        Op = call OpTab.new_internal();
+        if (Op == NULL) return;
+
+        State = call OpTab.fetch_user_data(Op);
+
+        dbg("Out", "Harvest with opid=%d\n", State->int_opid);
+
+        State->op.type = COLLECT;
+        if (call RTab.new_route[State->int_opid](Prev, &Hop) !=
+                HERP_RT_SUBSCRIBED) {
+            end_operation(State, FAIL);
         }
     }
 
