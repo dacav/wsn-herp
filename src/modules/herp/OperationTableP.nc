@@ -40,7 +40,7 @@ implementation {
         V->store = (void *)UserData;
         V->owner = TOS_NODE_ID;
 
-        if (signal OpTab.data_init(V, UserData) != SUCCESS) {
+        if (signal OpTab.data_init(UserData) != SUCCESS) {
             call UserDataPool.put(UserData);
             return FAIL;
         }
@@ -51,7 +51,7 @@ implementation {
     event void IntMap.value_dispose (const herp_opid_t *K, herp_oprec_t V) {
         user_data *Data = (user_data *) V->store;
 
-        signal OpTab.data_dispose(V, Data);
+        signal OpTab.data_dispose(Data);
         call UserDataPool.put(Data);
         call OperationId.put(*K);
     }
@@ -192,10 +192,6 @@ implementation {
 
     command am_addr_t OpTab.fetch_owner (const herp_oprec_t Rec) {
         return Rec->owner;
-    }
-
-    default event void OpTab.data_dispose (const herp_oprec_t Rec,
-                                           user_data *UserData) {
     }
 
 }

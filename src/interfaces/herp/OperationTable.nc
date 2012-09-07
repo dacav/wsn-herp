@@ -45,8 +45,8 @@ interface OperationTable<user_data> {
 
     command am_addr_t fetch_owner (const herp_oprec_t Rec);
 
-    event error_t data_init (const herp_oprec_t Rec, user_data *UserData);
+    event error_t data_init (user_data *UserData);
 
-    event void data_dispose (const herp_oprec_t Rec, user_data *UserData);
+    event void data_dispose (user_data *UserData);
 
 }
