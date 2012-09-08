@@ -21,6 +21,7 @@ module RoutingP {
         interface TimerDelay;
         interface MultiTimer<struct route_state> as Timer;
         interface Pool<message_t> as PayloadPool;
+        interface Queue<route_state_t> RetryQueue;
     }
 
 }
@@ -37,10 +38,66 @@ implementation {
     {
     }
 
+    static error_t send_fetch_route (route_state_t State);
+
+    task void send_retry_task ()
+    {
+        route_state_t State;
+        error_t E;
+
+        assert(call RetryQueue.empty() == FALSE);
+        State = call RetryQueue.dequeue();
+
+        E = send_fetch_route(State);
+        if (E != SUCCESS) {
+            call AMSend.sendDone(State->send.msg, E);
+            call OpTab.free_record(State->op_rec);
+        }
+    }
+
+    static error_t retry (route_state_t State)
+    {
+        error_t Ret;
+
+        if (State->send.retry == 0) return FAIL;
+
+        Ret = call RetryQueue.enqueue(State);
+        if (Ret == SUCCESS) {
+            State->send.retry --;
+            post send_retry_task();
+        }
+        return Ret;
+    }
+
+    static error_t send_fetch_route (route_state_t State)
+    {
+        herp_rtentry_t Entry;
+
+        switch (call RTab.get_route(State->send.target, &Entry)) {
+            case HERP_RT_ERROR:
+                return ENOMEM;
+
+            case HERP_RT_SUBSCRIBED:
+                /* Waiting the next-hop. */
+                State->op.phase = WAIT_ROUTE;
+                return SUCCESS;
+
+            case HERP_RT_VERIFY:
+            case HERP_RT_REACH:
+                /* Start a reach operation and retry later. */
+                new_reach(State->send.target);
+                return retry(State);
+                break;
+
+            default:
+                assert(0)
+
+        };
+    }
+
     command error_t AMSend.send(am_addr_t Addr, message_t *Msg, uint8_t Len)
     {
         herp_oprec_t Op;
-        herp_opid_t OpId;
         error_t RetVal;
         route_state_t State;
 
@@ -48,18 +105,27 @@ implementation {
         if (Op == NULL) return ENOMEM;
 
         State = call OpTab.fetch_user_data(Op);
-        assert(State->op.phase == START);
-        State->op.type = SEND;
+        assert(State->op.type == NEW &&
+               State->op.phase == START);
 
-        OpId = call OpTab.fetch_internal_id(Op);
+        /* -- Initialization ------------------------------------------ */
+
+        State->op.type = SEND;
+        State->op_rec = Op;
+
         RetVal = call Prot.init_user_msg(Msg, OpId, Addr);
         if (RetVal != SUCCESS) {
             call OpTab.free_record(Op);
             return RetVal;
         }
-        State->send.target = Addr;
+
+        call Packet.setPayloadLength(Msg, Len);
+
         State->send.msg = Msg;
-        State->send.len = Len;
+        State->send.target = Addr;
+        State->send.retry = HERP_MAX_RETRY;
+
+        /* -- Start the send process ---------------------------------- */
 
         RetVal = send_fetch_route(State);
         if (RetVal != SUCCESS) {
@@ -98,6 +164,7 @@ implementation {
 
     command void * AMSend.getPayload(message_t *Msg, uint8_t Len)
     {
+        return call Packet.getPayload(Msg, Len);
     }
 
     command uint8_t AMSend.maxPayloadLength()
