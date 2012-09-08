@@ -11,35 +11,42 @@ typedef enum {
     NEW     = 0,
     SEND    = 1,
     EXPLORE = 2,
-    PAYLOAD = 3,
-    COLLECT = 4
+    BUILD   = 3,
+    PAYLOAD = 4,
+    COLLECT = 5
 } op_type_t;
 
 typedef enum {
     START           = 0,
-    EXPLORE_SENDING = 1,
-    EXPLORE_SENT    = 2,
+    WAIT_PROT       = 1,
+    WAIT_BUILD      = 2,
     WAIT_ROUTE      = 3,
-    EXEC_JOB        = 4
+    WAIT_JOB        = 4
 } op_phase_t;
 
-typedef struct comm_state {
-    herp_rtroute_t job;
-    sched_item_t sched;
-} * comm_state_t;
-
 typedef struct {
-    struct comm_state comm;
     message_t *msg;
-    uint8_t len;
     am_addr_t target;
+    uint8_t retry;
 } send_state_t;
 
 typedef struct {
-    struct comm_state comm;
-    am_addr_t prev;
-    uint16_t hops_from_src;  // <- useful for choice of best prev
-    herp_opinfo_t info;
+    herp_rtroute_t job;         /**< NULL unless we've a running job wrt
+                                     Routing Table */
+
+    sched_item_t sched;         /**< NULL unless we've a running timer */
+
+    am_addr_t prev;             /**< Node for Build forwarding (set to
+                                     TOS_NODE_ID if the communication is
+                                     local */
+
+    am_addr_t propagate;        /**< Explore propagation address (may be
+                                     AM_BROADCAST_ADDR. */
+
+    uint16_t hops_from_src;     /**< Useful for choice of best prev; */
+
+    herp_opinfo_t info;         /**< Context for information propagation. */
+
 } explore_state_t;
 
 typedef struct {
@@ -49,14 +56,12 @@ typedef struct {
 } payload_state_t;
 
 typedef struct route_state {
-    uint8_t restart;
-
     struct {
         uint8_t type    : 4;    // op_type_t
         uint8_t phase   : 4;    // op_phase_t
     } op;
 
-    herp_opid_t int_opid;
+    herp_oprec_t op_rec;
 
     union {
         send_state_t send;
