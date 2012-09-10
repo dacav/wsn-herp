@@ -17,9 +17,9 @@ typedef enum {
 
 typedef enum {
     START           = 0,
-    WAIT_ROUTE      = 1,
-    WAIT_JOB        = 2,
-    WAIT_PROT       = 3
+    WAIT_PROT       = 1
+    WAIT_ROUTE      = 2,
+    WAIT_JOB        = 3,
 } op_phase_t;
 
 typedef struct {

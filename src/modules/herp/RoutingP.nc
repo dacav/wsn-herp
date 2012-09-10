@@ -36,6 +36,13 @@ implementation {
 
     event void OpTab.data_dispose (route_state_t State)
     {
+        if (State->op.type != EXPLORE) return;
+
+        assert(State->explore.job == NULL);
+
+        if (State->explore.sched) {
+            call Timer.nullify(State->explore.sched);
+        }
     }
 
     static error_t send_fetch_route (route_state_t State);
@@ -57,7 +64,7 @@ implementation {
 
     static inline error_t fwd_explore (route_state_t State)
     {
-        return call Protocol.fwd_explore(
+        return call Prot.fwd_explore(
                     &State->explore.info,
                     State->explore.first_hop,
                     State->explore.hops_from_src
@@ -92,9 +99,10 @@ implementation {
 
         State->op.phase = WAIT_PROT;
         Explore = &State->explore;
-        Explore.propagate = (Route == NULL)
-                          ? AM_BROADCAST_ADDR
-                          : call RTab.get_hop(Route)->first_hop
+        Explore->job = Route;
+        Explore->propagate = (Route == NULL)
+                           ? AM_BROADCAST_ADDR
+                           : call RTab.get_hop(Route)->first_hop
 
         if (Explore->info.from == TOS_NODE_ID) {
             /* This is a local operation */
@@ -102,10 +110,10 @@ implementation {
 
             assert(State->info.from == TOS_NODE_ID);
             if (Explore->propagate == AM_BROADCAST_ADDR) {
-                E = call Protocol.send_reach(OpId, Explore->info.to);
+                E = call Prot.send_reach(OpId, Explore->info.to);
             } else {
-                E = call Protocol.send_verify(OpId, Explore->info.to,
-                                              Explore->propagate);
+                E = call Prot.send_verify(OpId, Explore->info.to,
+                                          Explore->propagate);
             }
         } else {
             /* This is a remote operation */
@@ -233,6 +241,13 @@ implementation {
 
     event void Timer.fired (route_state_t State)
     {
+        assert(State->op.type == EXPLORE);
+        assert(State->explore.sched != NULL);
+
+        State->explore.sched = NULL;
+        if (State->explore.job != NULL) {
+            call RTab.drop_route(State->explore.job);
+        }
     }
 
     static void set_explore_data (explore_state_t *Explore,
@@ -243,6 +258,30 @@ implementation {
         Explore->prev = Prev;
         Explore->hops_from_src = HopsFromSrc;
         opinfo_copy(&Explore->info, Info);
+    }
+
+    static void start_timer (explore_state_t *Explore)
+    {
+        uint32_t T;
+
+        if (Explore->job == NULL) {
+            T = call TimerDelay.for_any_node();
+        } else {
+            T = call TimerDelay.for_hops(
+                    call RTab.get_hop(Explore->job)->n_hops;
+                );
+        }
+
+        Explore->sched = call Timer.schedule(T);
+    }
+
+    static void restart_timer (explore_state_t *Explore)
+    {
+        if (Explore->sched != NULL) {
+            call Timer.nullify(Explore->sched);
+            Explore->sched = NULL;
+        }
+        start_timer(Explore);
     }
 
     event void Prot.got_explore (const herp_opinfo_t *Info, am_addr_t Prev,
@@ -278,8 +317,9 @@ implementation {
 
                 set_explore_data(Explore, Prev, HopsFromSrc, Info);
                 if (State->op.phase != WAIT_ROUTE) {
-                    /* Note: don't care if this operation fails */
-                    fwd_explore(State);
+                    if (fwd_explore(State) == SUCCESS) {
+                        restart_timer(Explore);
+                    }
                 }
 
                 break;
@@ -292,13 +332,41 @@ implementation {
         }
     }
 
+    static void prot_done (route_state_t State)
+    {
+        explore_state_t *Explore;
+
+        assert(State->op.type != NEW);
+
+        if (State->op.type != EXPLORE) return;
+
+        Explore = &State->explore;
+        switch (State->op.phase) {
+
+            case WAIT_PROT:
+                enable_timer(Explore);  // XXX 0
+                break;
+
+            default:
+                assert(0);
+        }
+    }
+
     event void Prot.done_local (herp_opid_t OpId, error_t E)
     {
+        herp_opid_t Op = call OpTab.internal(OpId);
+
+        assert(Op != NULL);
+        prot_done( call OpTab.fetch_user_data(Op) );
     }
 
     event void Prot.done_remote (am_addr_t Own, herp_opid_t ExtOpId,
                                  error_t E)
     {
+        herp_opid_t Op = call OpTab.external(Own, ExtOpId, TRUE);
+
+        assert(Op != NULL);
+        prot_done( call OpTab.fetch_user_data(Op) );
     }
 
     event void Prot.got_build (const herp_opinfo_t *Info, am_addr_t Prev,
