@@ -18,7 +18,8 @@ typedef enum {
 typedef enum {
     START           = 0,
     WAIT_ROUTE      = 1,
-    WAIT_JOB        = 2
+    WAIT_JOB        = 2,
+    WAIT_PROT       = 3
 } op_phase_t;
 
 typedef struct {
@@ -29,14 +30,21 @@ typedef struct {
 
 typedef struct {
     herp_rtroute_t job;         /**< NULL unless we've a running job wrt
-                                  Routing Table */
+                                     Routing Table */
+
     sched_item_t sched;         /**< NULL unless we've a running timer */
 
     am_addr_t prev;             /**< Node for Build forwarding (set to
-                                   TOS_NODE_ID if the communication is
-                                   local */
+                                     TOS_NODE_ID if the communication is
+                                     local */
+
+    am_addr_t propagate;        /**< Explore propagation address (may be
+                                     AM_BROADCAST_ADDR. */
+
     uint16_t hops_from_src;     /**< Useful for choice of best prev; */
+
     herp_opinfo_t info;         /**< Context for information propagation. */
+
 } explore_state_t;
 
 typedef struct {
