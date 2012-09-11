@@ -204,7 +204,7 @@ implementation {
         };
     }
 
-    command error_t AMSend.send(am_addr_t Addr, message_t *Msg, uint8_t Len)
+    command error_t AMSend.send (am_addr_t Addr, message_t *Msg, uint8_t Len)
     {
         error_t RetVal;
         route_state_t State;
@@ -355,11 +355,17 @@ implementation {
 
         assert(State->op.type != NEW);
 
-        if (State->op.type != EXPLORE) {
-            /* Apart from exploration, any other operation terminates
-             * here. */
-            call OpTab.free_record(State->op_rec);
-            return;
+        switch (State->op.type) {
+
+            case EXPLORE:
+                /* Next code chunk */
+                break;
+
+            case SEND:
+                signal AMSend.sendDone(State->msg, SUCCESS);
+            default:
+                call OpTab.free_record(State->op_rec);
+                return;
         }
 
         Explore = &State->explore;
@@ -484,6 +490,12 @@ implementation {
                                    Hop->n_hops);
     }
 
+    static error_t run_send (route_state_t State, am_addr_t FirstHop)
+    {
+        uint8_t MsgLen = call Packet.payloadLength(State->send.msg);
+        return call Prot.send_data(State->send.msg, MsgLen, FirstHop);
+    }
+
     event void RTab.deliver [herp_opid_t OpId](herp_rtres_t Out, am_addr_t Node,
                                                const herp_rthop_t *Hop)
     {
@@ -494,7 +506,11 @@ implementation {
         State = call OpTab.fetch_user_data(Op);
 
         if (Out != HERP_RT_SUCCESS) {
-            call OpTab.free_record(State->op_rec);
+            if (State->op.type == SEND) {
+                retry(State);
+            } else {
+                call OpTab.free_record(State->op_rec);
+            }
             return;
         }
 
@@ -530,6 +546,12 @@ implementation {
                 break;
 
             case SEND:
+                assert(State->op.phase == WAIT_ROUTE);
+                if (run_send(State, Hop->first_hop) != SUCCESS) {
+                    call OpTab.free_record(State->op_rec);
+                }
+                break;
+
             case PAYLOAD:
             default:
                 assert(0);
