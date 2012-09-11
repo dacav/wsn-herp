@@ -38,7 +38,9 @@ implementation {
     {
         if (State->op.type != EXPLORE) return;
 
-        assert(State->explore.job == NULL);
+        if (State->explore.job) {
+            call RTab.drop_job(State->explore.job);
+        }
 
         if (State->explore.sched) {
             call Timer.nullify(State->explore.sched);
@@ -247,6 +249,7 @@ implementation {
         State->explore.sched = NULL;
         if (State->explore.job != NULL) {
             call RTab.drop_route(State->explore.job);
+            State->explore.job = NULL;
         }
     }
 
@@ -275,12 +278,16 @@ implementation {
         Explore->sched = call Timer.schedule(T);
     }
 
+    static void stop_timer (explore_state_t *Explore)
+    {
+        if (Explore->sched == NULL) return;
+        call Timer.nullify(Explore->sched);
+        Explore->sched = NULL;
+    }
+
     static void restart_timer (explore_state_t *Explore)
     {
-        if (Explore->sched != NULL) {
-            call Timer.nullify(Explore->sched);
-            Explore->sched = NULL;
-        }
+        stop_timer(Explore);
         start_timer(Explore);
     }
 
@@ -301,10 +308,20 @@ implementation {
         switch (State->op.type) {
 
             case NEW:
-                State->op.type = EXPLORE;
                 State->op_rec = Op;
-                set_explore_data(Explore, Prev, HopsFromSrc, Info);
-                if (run_explore(State) != SUCCESS) {
+                if (Info->to == TOS_NODE_ID) {
+                    State->op.type = BUILD;
+                    E = call Prot.send_build(
+                            call OpTab.fetch_internal_id(Op),
+                            Info,
+                            Prev
+                        );
+                } else {
+                    State->op.type = EXPLORE;
+                    set_explore_data(Explore, Prev, HopsFromSrc, Info);
+                    E = run_explore(State);
+                }
+                if (E != SUCCESS) {
                     call OpTab.free_record(Op);
                 }
                 break;
@@ -338,13 +355,26 @@ implementation {
 
         assert(State->op.type != NEW);
 
-        if (State->op.type != EXPLORE) return;
+        if (State->op.type != EXPLORE) {
+            /* Apart from exploration, any other operation terminates
+             * here. */
+            call OpTab.free_record(State->op_rec);
+            return;
+        }
 
         Explore = &State->explore;
         switch (State->op.phase) {
 
             case WAIT_PROT:
-                enable_timer(Explore);  // XXX 0
+                enable_timer(Explore);
+                State->op.phase = WAIT_BUILD;
+                break;
+
+            case WAIT_JOB:  /* End of operation! */
+                call OpTab.free_record(State->op_rec);
+                break;
+
+            case WAIT_BUILD:
                 break;
 
             default:
@@ -369,14 +399,140 @@ implementation {
         prot_done( call OpTab.fetch_user_data(Op) );
     }
 
+    static void update_rtab (route_state_t State, am_addr_t Prev,
+                             uint16_t HopsFromDst)
+    {
+        herp_rthop_t Hop;
+        herp_rtres_t Res;
+        herp_opid_t OpId;
+
+        Hop.first_hop = Prev;
+        Hop.n_hops = HopsFromDst;
+
+        OpId = call OpTab.fetch_internal_id(State->op_rec);
+        if (State->explore.job == NULL) {
+            Res = call RTab.new_route[OpId](State->explore.info.to, Hop);
+        } else {
+            Res = call RTab.update_route[OpId](State->explore.job, Hop);
+            State->explore.job = NULL;
+        }
+
+        if (Res != HERP_RT_SUBSCRIBED) {
+            call OpTab.free_record(State->op_rec);
+        }
+
+    }
+
+    static void steal_route (route_state_t State, am_addr_t To)
+    {
+        herp_opid_t OpId = call OpTab.fetch_internal_id(State->op_rec);
+        herp_rthop_t Hop = {
+            .first_hop = To,
+            .n_hops = 1
+        };
+
+        Res = call RTab.new_route[OpId](To, Hop);
+    }
+
     event void Prot.got_build (const herp_opinfo_t *Info, am_addr_t Prev,
                                uint16_t HopsFromDst)
     {
+        herp_oprec_t Op;
+        route_state_t State;
+
+        Op = call OpTab.external(Info->from, Info->ext_opid, FALSE);
+        if (Op == NULL) return;     /* Out of memory */
+
+        State = call OpTab.fetch_user_data(Op);
+
+        if (State->op.type == NEW) {
+            State->op.type = COLLECT;
+        }
+
+        if (Prev != Info->to) {
+            steal_route(State, Prev);
+        }
+
+        switch (State->op.type) {
+
+            case COLLECT:
+                // XXX start
+                break;
+
+            case EXPLORE:
+                // TODO: change assertion in "byzantine" after testing.
+                assert(State->op.phase == WAIT_BUILD);
+                stop_timer(&State->explore);
+                State->op.phase = WAIT_ROUTE;
+                update_rtab(State, Prev, HopsFromDst);
+                break;
+
+            case SEND:      /* Byzantine */
+            case PAYLOAD:   /* Byzantine */
+            default:
+                assert(0);
+
+        }
+    }
+
+    static inline error_t fwd_build (explore_state_t *Explore,
+                                     const herp_rthop_t *Hop)
+    {
+        return call Prot.fwd_build(&Explore->info,
+                                   Explore->prev,
+                                   Hop->n_hops);
     }
 
     event void RTab.deliver [herp_opid_t OpId](herp_rtres_t Out, am_addr_t Node,
                                                const herp_rthop_t *Hop)
     {
+        herp_oprec_t Op = call OpTab.internal(OpId);
+        route_state_t State;
+
+        assert(Op != NULL);
+        State = call OpTab.fetch_user_data(Op);
+
+        if (Out != HERP_RT_SUCCESS) {
+            call OpTab.free_record(State->op_rec);
+            return;
+        }
+
+        switch (State->op.type) {
+
+            case EXPLORE:
+                if (State->op.phase != WAIT_ROUTE) {
+                    /* This is a stealed route. Some checks, then ignore. */
+                    assert(State->op.phase == WAIT_BUILD);
+                    assert(State->explore.info.to != Node);
+                    return;
+                }
+                if (State->explore.info.to != Node) {
+                    /* Got the record for a route, subscribed by this
+                     * operation, which we are not interested in */
+
+                    assert(0);  // Does this really happen at this point?
+                    return;
+                }
+                if (State->explore.prev != TOS_NODE_ID) {
+                    if (fwd_build(&State->explore, Hop) == SUCCESS) {
+                        /* If success we wait for protocol confirmation. */
+                        State->op.phase = WAIT_JOB;
+                    } else {
+                        /* Else we terminate the operation right now */
+                        call OpTab.free_record(State->op_rec);
+                    }
+                }
+                break;
+
+            case COLLECT:
+                break;
+
+            case SEND:
+            case PAYLOAD:
+            default:
+                assert(0);
+        }
+
     }
 
     command void * AMSend.getPayload(message_t *Msg, uint8_t Len)

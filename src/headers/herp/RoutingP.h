@@ -11,15 +11,17 @@ typedef enum {
     NEW     = 0,
     SEND    = 1,
     EXPLORE = 2,
-    PAYLOAD = 3,
-    COLLECT = 4
+    BUILD   = 3,
+    PAYLOAD = 4,
+    COLLECT = 5
 } op_type_t;
 
 typedef enum {
     START           = 0,
-    WAIT_PROT       = 1
-    WAIT_ROUTE      = 2,
-    WAIT_JOB        = 3,
+    WAIT_PROT       = 1,
+    WAIT_BUILD      = 2,
+    WAIT_ROUTE      = 3,
+    WAIT_JOB        = 4
 } op_phase_t;
 
 typedef struct {
