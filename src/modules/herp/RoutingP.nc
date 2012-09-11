@@ -399,28 +399,26 @@ implementation {
         prot_done( call OpTab.fetch_user_data(Op) );
     }
 
-    static void update_rtab (route_state_t State, am_addr_t Prev,
-                             uint16_t HopsFromDst)
+    static error_t update_rtab (route_state_t State,
+                                am_addr_t To,
+                                am_addr_t NextHop,
+                                uint16_t HopsFromDst)
     {
-        herp_rthop_t Hop;
+        herp_rthop_t Hop = {
+            .first_hop = NextHop,
+            .n_hops = HopsFromDst
+        };
+        herp_opid_t OpId = call OpTab.fetch_internal_id(State->op_rec);
         herp_rtres_t Res;
-        herp_opid_t OpId;
 
-        Hop.first_hop = Prev;
-        Hop.n_hops = HopsFromDst;
-
-        OpId = call OpTab.fetch_internal_id(State->op_rec);
-        if (State->explore.job == NULL) {
-            Res = call RTab.new_route[OpId](State->explore.info.to, Hop);
-        } else {
-            Res = call RTab.update_route[OpId](State->explore.job, Hop);
+        if (State->op.type == EXPLORE && State->explore.job != NULL) {
+            Res = call RTab.update_route[OpId](State->explore.job, &Hop);
             State->explore.job = NULL;
+        } else {
+            Res = call RTab.new_route[OpId](To, &Hop);
         }
 
-        if (Res != HERP_RT_SUBSCRIBED) {
-            call OpTab.free_record(State->op_rec);
-        }
-
+        return (Res == HERP_RT_SUBSCRIBED) ? SUCCESS : FAIL;
     }
 
     static void steal_route (route_state_t State, am_addr_t To)
@@ -431,7 +429,7 @@ implementation {
             .n_hops = 1
         };
 
-        Res = call RTab.new_route[OpId](To, Hop);
+        call RTab.new_route[OpId](To, Hop);
     }
 
     event void Prot.got_build (const herp_opinfo_t *Info, am_addr_t Prev,
@@ -439,6 +437,7 @@ implementation {
     {
         herp_oprec_t Op;
         route_state_t State;
+        error_t E;
 
         Op = call OpTab.external(Info->from, Info->ext_opid, FALSE);
         if (Op == NULL) return;     /* Out of memory */
@@ -455,24 +454,26 @@ implementation {
 
         switch (State->op.type) {
 
-            case COLLECT:
-                // XXX start
-                break;
-
             case EXPLORE:
-                // TODO: change assertion in "byzantine" after testing.
+                // TODO: change assertions in "byzantine" after testing.
                 assert(State->op.phase == WAIT_BUILD);
+                assert(Info->to == State->explore.info.to);
+
                 stop_timer(&State->explore);
                 State->op.phase = WAIT_ROUTE;
-                update_rtab(State, Prev, HopsFromDst);
+            case COLLECT:
+                E = update_rtab(State, Info->to, Prev, HopsFromDst);
+                if (E != SUCCESS) {
+                    call OpTab.free_record(State->op_rec);
+                }
                 break;
 
             case SEND:      /* Byzantine */
             case PAYLOAD:   /* Byzantine */
             default:
                 assert(0);
-
         }
+
     }
 
     static inline error_t fwd_build (explore_state_t *Explore,
@@ -525,6 +526,7 @@ implementation {
                 break;
 
             case COLLECT:
+                call OpTab.free_record(State->op_rec);
                 break;
 
             case SEND:
