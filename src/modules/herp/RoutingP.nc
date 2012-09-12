@@ -18,6 +18,7 @@ module RoutingP {
         interface RoutingTable as RTab[herp_opid_t];
         interface Protocol as Prot;
         interface Packet;
+        interface AMPacket;
         interface TimerDelay;
         interface MultiTimer<struct route_state> as Timer;
         interface Pool<message_t> as PayloadPool;
@@ -36,14 +37,23 @@ implementation {
 
     event void OpTab.data_dispose (route_state_t State)
     {
-        if (State->op.type != EXPLORE) return;
+        switch (State->op.type) {
 
-        if (State->explore.job) {
-            call RTab.drop_job(State->explore.job);
-        }
+            case EXPLORE:
+                if (State->explore.job) {
+                    call RTab.drop_job(State->explore.job);
+                }
 
-        if (State->explore.sched) {
-            call Timer.nullify(State->explore.sched);
+                if (State->explore.sched) {
+                    call Timer.nullify(State->explore.sched);
+                }
+                break;
+
+            case PAYLOAD:
+                if (State->payload.msg) {
+                    call PayloadPool.put(State->payload.msg);
+                }
+            default:
         }
     }
 
@@ -353,8 +363,6 @@ implementation {
     {
         explore_state_t *Explore;
 
-        assert(State->op.type != NEW);
-
         switch (State->op.type) {
 
             case EXPLORE:
@@ -363,9 +371,14 @@ implementation {
 
             case SEND:
                 signal AMSend.sendDone(State->msg, SUCCESS);
-            default:
+            case PAYLOAD:
+            case COLLECT:
+                assert(State->op.phase == WAIT_JOB);
                 call OpTab.free_record(State->op_rec);
                 return;
+
+            default:
+                assert(0);
         }
 
         Explore = &State->explore;
@@ -496,6 +509,12 @@ implementation {
         return call Prot.send_data(State->send.msg, MsgLen, FirstHop);
     }
 
+    static error_t fwd_payload (route_state_t State, am_addr_t FirstHop)
+    {
+        return call Prot.fwd_payload(&State->info, FirstHop, State->msg,
+                                     State->len);
+    }
+
     event void RTab.deliver [herp_opid_t OpId](herp_rtres_t Out, am_addr_t Node,
                                                const herp_rthop_t *Hop)
     {
@@ -547,12 +566,22 @@ implementation {
 
             case SEND:
                 assert(State->op.phase == WAIT_ROUTE);
-                if (run_send(State, Hop->first_hop) != SUCCESS) {
+                if (run_send(State, Hop->first_hop) == SUCCESS) {
+                    State->op.phase = WAIT_JOB;
+                } else {
                     call OpTab.free_record(State->op_rec);
                 }
                 break;
 
             case PAYLOAD:
+                assert(State->op.phase == WAIT_ROUTE);
+                if (fwd_payload(State, Next) == SUCCESS) {
+                    State->op.phase = WAIT_JOB;
+                } else {
+                    call OpTab.free_record(State->op_rec);
+                }
+                break;
+
             default:
                 assert(0);
         }
@@ -577,6 +606,48 @@ implementation {
     event message_t * Prot.got_payload (const herp_opinfo_t *Info,
                                         message_t *Msg, uint8_t Len)
     {
+        if (Info->to == TOS_NODE_ID) {
+            void *Payload = call Packet.getPayload(Msg, Len);
+
+            call AMPacket.setDestination(Msg, TOS_NODE_ID);
+            call AMPacket.setSource(Msg, Info->from);
+            call Recieve.receive(Msg, Payload, Len);
+
+        } else {
+            herp_oprec_t Op;
+            route_state_t State;
+            herp_rtentry_t Entry;
+       
+            if (!call PayloadPool.empty()) {
+                return Msg;
+            }
+
+            Op = call OpTab.external(Info->from, Info->ext_opid, FALSE);
+            if (Op == NULL) {
+                return Msg;
+            }
+
+            State = call OpTab.fetch_user_data(Op);
+            if (State->op.type != NEW) {
+                call OpTab.free_record(Op);
+                return Msg;
+            }
+
+            State->op.type = PAYLOAD;
+            State->op.phase = WAIT_ROUTE;
+
+            if (call RTab.get_route(Info->to, &Entry) != HERP_RT_SUBSCRIBED) {
+                call OpTab.free_record(Op);
+                return Msg;
+            }
+
+            State->payload.msg = Msg;
+            State->payload.len = Len;
+            State->payload.info = *Info;
+            Msg = call PayloadPool.get();
+
+        }
+
         return Msg;
     }
 
