@@ -22,7 +22,7 @@ module RoutingP {
         interface TimerDelay;
         interface MultiTimer<struct route_state> as Timer;
         interface Pool<message_t> as PayloadPool;
-        interface Queue<route_state_t> RetryQueue;
+        interface Queue<route_state_t> as RetryQueue;
     }
 
 }
@@ -35,13 +35,18 @@ implementation {
         return SUCCESS;
     }
 
+    static inline herp_opid_t opid (route_state_t State)
+    {
+        return call OpTab.fetch_internal_id(State->op_rec);
+    }
+
     event void OpTab.data_dispose (route_state_t State)
     {
         switch (State->op.type) {
 
             case EXPLORE:
                 if (State->explore.job) {
-                    call RTab.drop_job(State->explore.job);
+                    call RTab.drop_job[opid(State)](State->explore.job);
                 }
 
                 if (State->explore.sched) {
@@ -62,6 +67,7 @@ implementation {
     static route_state_t new_op ()
     {
         herp_oprec_t Op;
+        route_state_t State;
 
         Op = call OpTab.new_internal();
         if (Op == NULL) return NULL;
@@ -78,19 +84,20 @@ implementation {
     {
         return call Prot.fwd_explore(
                     &State->explore.info,
-                    State->explore.first_hop,
+                    State->explore.propagate,
                     State->explore.hops_from_src
                );
     }
 
-    static void run_explore (route_state_t State)
+    static error_t run_explore (route_state_t State)
     {
         herp_rtentry_t Entry;
         herp_rtroute_t Route = NULL;
         explore_state_t *Explore;
         error_t E;
+        herp_opid_t OpId = opid(State);
 
-        switch (call RTab.get_route(State->send.target, &Entry)) {
+        switch (call RTab.get_route[OpId](State->send.target, &Entry)) {
             case HERP_RT_ERROR:
                 return ENOMEM;
 
@@ -100,13 +107,13 @@ implementation {
                 return SUCCESS;
 
             case HERP_RT_VERIFY:
-                Route = call RTab.get_job(Entry);
+                Route = call RTab.get_job[OpId](Entry);
                 if (Route == NULL) return ERETRY;
             case HERP_RT_REACH:
                 break;
 
             default:
-                assert(0)
+                assert(0);
         };
 
         State->op.phase = WAIT_PROT;
@@ -114,13 +121,11 @@ implementation {
         Explore->job = Route;
         Explore->propagate = (Route == NULL)
                            ? AM_BROADCAST_ADDR
-                           : call RTab.get_hop(Route)->first_hop
+                           : (call RTab.get_hop[OpId](Route))->first_hop;
 
         if (Explore->info.from == TOS_NODE_ID) {
             /* This is a local operation */
-            herp_opid_t OpId = call OpTab.fetch_internal_id(State->op_rec);
-
-            assert(State->info.from == TOS_NODE_ID);
+            assert(Explore->info.from == TOS_NODE_ID);
             if (Explore->propagate == AM_BROADCAST_ADDR) {
                 E = call Prot.send_reach(OpId, Explore->info.to);
             } else {
@@ -146,7 +151,7 @@ implementation {
         State->op.type = EXPLORE;
         State->explore.prev = TOS_NODE_ID;
 
-        opinfo_init(&State->info,
+        opinfo_init(&State->explore.info,
                     call OpTab.fetch_external_id(State->op_rec),
                     TOS_NODE_ID,
                     Target);
@@ -168,7 +173,7 @@ implementation {
 
         E = send_fetch_route(State);
         if (E != SUCCESS) {
-            call AMSend.sendDone(State->send.msg, E);
+            signal AMSend.sendDone(State->send.msg, E);
             call OpTab.free_record(State->op_rec);
         }
     }
@@ -192,7 +197,8 @@ implementation {
         herp_rtentry_t Entry;
         error_t Ret;
 
-        switch (call RTab.get_route(State->send.target, &Entry)) {
+        switch (call RTab.get_route[opid(State)](State->send.target,
+                                                 &Entry)) {
             case HERP_RT_ERROR:
                 return ENOMEM;
 
@@ -209,15 +215,16 @@ implementation {
                 return Ret;
 
             default:
-                assert(0)
+                assert(0);
 
         };
     }
 
     command error_t AMSend.send (am_addr_t Addr, message_t *Msg, uint8_t Len)
     {
-        error_t RetVal;
+        herp_oprec_t Op;
         route_state_t State;
+        error_t RetVal;
 
         State = new_op();
         if (Op == NULL) return ENOMEM;
@@ -230,7 +237,7 @@ implementation {
 
         State->op.type = SEND;
 
-        RetVal = call Prot.init_user_msg(Msg, OpId, Addr);
+        RetVal = call Prot.init_user_msg(Msg, opid(State), Addr);
         if (RetVal != SUCCESS) {
             call OpTab.free_record(Op);
             return RetVal;
@@ -258,7 +265,7 @@ implementation {
 
         State->explore.sched = NULL;
         if (State->explore.job != NULL) {
-            call RTab.drop_route(State->explore.job);
+            call RTab.drop_route[opid(State)](State->explore.job);
             State->explore.job = NULL;
         }
     }
@@ -273,32 +280,38 @@ implementation {
         opinfo_copy(&Explore->info, Info);
     }
 
-    static void start_timer (explore_state_t *Explore)
+    static void start_timer (route_state_t State)
     {
         uint32_t T;
 
-        if (Explore->job == NULL) {
+        assert(State->op.type == EXPLORE);
+        assert(State->explore.sched == NULL);
+
+        if (State->explore.job == NULL) {
             T = call TimerDelay.for_any_node();
         } else {
-            T = call TimerDelay.for_hops(
-                    call RTab.get_hop(Explore->job)->n_hops;
-                );
+            const herp_rthop_t *Hop;
+
+            Hop = call RTab.get_hop[opid(State)](State->explore.job);
+            T = call TimerDelay.for_hops(Hop->n_hops);
         }
 
-        Explore->sched = call Timer.schedule(T);
+        State->explore.sched = call Timer.schedule(T, State);
     }
 
-    static void stop_timer (explore_state_t *Explore)
+    static void stop_timer (route_state_t State)
     {
-        if (Explore->sched == NULL) return;
-        call Timer.nullify(Explore->sched);
-        Explore->sched = NULL;
+        assert(State->op.type == EXPLORE);
+
+        if (State->explore.sched == NULL) return;
+        call Timer.nullify(State->explore.sched);
+        State->explore.sched = NULL;
     }
 
-    static void restart_timer (explore_state_t *Explore)
+    static void restart_timer (route_state_t State)
     {
-        stop_timer(Explore);
-        start_timer(Explore);
+        stop_timer(State);
+        start_timer(State);
     }
 
     event void Prot.got_explore (const herp_opinfo_t *Info, am_addr_t Prev,
@@ -321,11 +334,7 @@ implementation {
                 State->op_rec = Op;
                 if (Info->to == TOS_NODE_ID) {
                     State->op.type = BUILD;
-                    E = call Prot.send_build(
-                            call OpTab.fetch_internal_id(Op),
-                            Info,
-                            Prev
-                        );
+                    E = call Prot.send_build(opid(State), Info, Prev);
                 } else {
                     State->op.type = EXPLORE;
                     set_explore_data(Explore, Prev, HopsFromSrc, Info);
@@ -340,12 +349,12 @@ implementation {
 
                 /* Exclude byzantine and useless cases */
                 if (State->explore.prev == TOS_NODE_ID) return;
-                if (HopsFromSrc >= Expore->hops_from_src) return;
+                if (HopsFromSrc >= Explore->hops_from_src) return;
 
                 set_explore_data(Explore, Prev, HopsFromSrc, Info);
                 if (State->op.phase != WAIT_ROUTE) {
                     if (fwd_explore(State) == SUCCESS) {
-                        restart_timer(Explore);
+                        restart_timer(State);
                     }
                 }
 
@@ -370,7 +379,7 @@ implementation {
                 break;
 
             case SEND:
-                signal AMSend.sendDone(State->msg, SUCCESS);
+                signal AMSend.sendDone(State->send.msg, SUCCESS);
             case PAYLOAD:
             case COLLECT:
                 assert(State->op.phase == WAIT_JOB);
@@ -385,7 +394,7 @@ implementation {
         switch (State->op.phase) {
 
             case WAIT_PROT:
-                enable_timer(Explore);
+                start_timer(State);
                 State->op.phase = WAIT_BUILD;
                 break;
 
@@ -403,7 +412,7 @@ implementation {
 
     event void Prot.done_local (herp_opid_t OpId, error_t E)
     {
-        herp_opid_t Op = call OpTab.internal(OpId);
+        herp_oprec_t Op = call OpTab.internal(OpId);
 
         assert(Op != NULL);
         prot_done( call OpTab.fetch_user_data(Op) );
@@ -412,7 +421,7 @@ implementation {
     event void Prot.done_remote (am_addr_t Own, herp_opid_t ExtOpId,
                                  error_t E)
     {
-        herp_opid_t Op = call OpTab.external(Own, ExtOpId, TRUE);
+        herp_oprec_t Op = call OpTab.external(Own, ExtOpId, TRUE);
 
         assert(Op != NULL);
         prot_done( call OpTab.fetch_user_data(Op) );
@@ -427,7 +436,7 @@ implementation {
             .first_hop = NextHop,
             .n_hops = HopsFromDst
         };
-        herp_opid_t OpId = call OpTab.fetch_internal_id(State->op_rec);
+        herp_opid_t OpId = opid(State);
         herp_rtres_t Res;
 
         if (State->op.type == EXPLORE && State->explore.job != NULL) {
@@ -442,13 +451,12 @@ implementation {
 
     static void steal_route (route_state_t State, am_addr_t To)
     {
-        herp_opid_t OpId = call OpTab.fetch_internal_id(State->op_rec);
         herp_rthop_t Hop = {
             .first_hop = To,
             .n_hops = 1
         };
 
-        call RTab.new_route[OpId](To, Hop);
+        call RTab.new_route[opid(State)](To, &Hop);
     }
 
     event void Prot.got_build (const herp_opinfo_t *Info, am_addr_t Prev,
@@ -478,7 +486,7 @@ implementation {
                 assert(State->op.phase == WAIT_BUILD);
                 assert(Info->to == State->explore.info.to);
 
-                stop_timer(&State->explore);
+                stop_timer(State);
                 State->op.phase = WAIT_ROUTE;
             case COLLECT:
                 E = update_rtab(State, Info->to, Prev, HopsFromDst);
@@ -511,8 +519,10 @@ implementation {
 
     static error_t fwd_payload (route_state_t State, am_addr_t FirstHop)
     {
-        return call Prot.fwd_payload(&State->info, FirstHop, State->msg,
-                                     State->len);
+        return call Prot.fwd_payload(&State->payload.info,
+                                     FirstHop,
+                                     State->payload.msg,
+                                     State->payload.len);
     }
 
     event void RTab.deliver [herp_opid_t OpId](herp_rtres_t Out, am_addr_t Node,
@@ -575,7 +585,7 @@ implementation {
 
             case PAYLOAD:
                 assert(State->op.phase == WAIT_ROUTE);
-                if (fwd_payload(State, Next) == SUCCESS) {
+                if (fwd_payload(State, Hop->first_hop) == SUCCESS) {
                     State->op.phase = WAIT_JOB;
                 } else {
                     call OpTab.free_record(State->op_rec);
@@ -611,7 +621,7 @@ implementation {
 
             call AMPacket.setDestination(Msg, TOS_NODE_ID);
             call AMPacket.setSource(Msg, Info->from);
-            call Recieve.receive(Msg, Payload, Len);
+            signal Receive.receive(Msg, Payload, Len);
 
         } else {
             herp_oprec_t Op;
@@ -636,7 +646,8 @@ implementation {
             State->op.type = PAYLOAD;
             State->op.phase = WAIT_ROUTE;
 
-            if (call RTab.get_route(Info->to, &Entry) != HERP_RT_SUBSCRIBED) {
+            if (call RTab.get_route[opid(State)](Info->to, &Entry)
+                    != HERP_RT_SUBSCRIBED) {
                 call OpTab.free_record(Op);
                 return Msg;
             }

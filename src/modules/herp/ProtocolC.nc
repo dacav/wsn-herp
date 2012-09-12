@@ -9,6 +9,7 @@ generic configuration ProtocolC (uint8_t MSG_POOL_SIZE, am_id_t AM_ID) {
 
         interface SplitControl as AMControl;
         interface Packet;
+        interface AMPacket;
     }
 
 }
@@ -54,6 +55,7 @@ implementation {
     AMControl = ActiveMessageC;
     Protocol = ProtocolP;
     Packet = ProtocolP;
+    AMPacket = AMSenderC;
     TimerDelay = StatAMSendC;
 
 }
