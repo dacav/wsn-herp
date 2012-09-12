@@ -6,6 +6,7 @@
 #include <RoutingTable.h>
 #include <Protocol.h>
 #include <MultiTimer.h>
+#include <OperationTable.h>
 
 typedef enum {
     NEW     = 0,
@@ -40,10 +41,10 @@ typedef struct {
                                      TOS_NODE_ID if the communication is
                                      local */
 
+    uint16_t hops_from_src;     /**< Useful for choice of best prev; */
+
     am_addr_t propagate;        /**< Explore propagation address (may be
                                      AM_BROADCAST_ADDR. */
-
-    uint16_t hops_from_src;     /**< Useful for choice of best prev; */
 
     herp_opinfo_t info;         /**< Context for information propagation. */
 
