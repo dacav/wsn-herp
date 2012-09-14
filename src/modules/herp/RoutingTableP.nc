@@ -145,8 +145,6 @@ implementation {
     }
 
     command herp_rtres_t RTab.drop_route [herp_opid_t OpId](herp_rtroute_t ToDrop) {
-        herp_rtentry_t Entry;
-
         if (ToDrop->state != BUILDING || ToDrop->owner != OpId) {
             return HERP_RT_ERROR;
         }

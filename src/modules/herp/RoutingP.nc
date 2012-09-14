@@ -80,6 +80,11 @@ implementation {
         return State;
     }
 
+    static inline void del_op (route_state_t State)
+    {
+        call OpTab.free_record(State->op_rec);
+    }
+
     static inline error_t fwd_explore (route_state_t State)
     {
         return call Prot.fwd_explore(
@@ -158,7 +163,7 @@ implementation {
 
         Ret = run_explore(State);
         if (Ret != SUCCESS) {
-            call OpTab.free_record(State->op_rec);
+            del_op(State);
         }
         return Ret;
     }
@@ -174,7 +179,7 @@ implementation {
         E = send_fetch_route(State);
         if (E != SUCCESS) {
             signal AMSend.sendDone(State->send.msg, E);
-            call OpTab.free_record(State->op_rec);
+            del_op(State);
         }
     }
 
@@ -222,14 +227,11 @@ implementation {
 
     command error_t AMSend.send (am_addr_t Addr, message_t *Msg, uint8_t Len)
     {
-        herp_oprec_t Op;
         route_state_t State;
         error_t RetVal;
 
         State = new_op();
-        if (Op == NULL) return ENOMEM;
 
-        State = call OpTab.fetch_user_data(Op);
         assert(State->op.type == NEW &&
                State->op.phase == START);
 
@@ -239,7 +241,7 @@ implementation {
 
         RetVal = call Prot.init_user_msg(Msg, opid(State), Addr);
         if (RetVal != SUCCESS) {
-            call OpTab.free_record(Op);
+            del_op(State);
             return RetVal;
         }
 
@@ -253,7 +255,7 @@ implementation {
 
         RetVal = send_fetch_route(State);
         if (RetVal != SUCCESS) {
-            call OpTab.free_record(Op);
+            del_op(State);
         }
         return RetVal;
     }
@@ -341,7 +343,7 @@ implementation {
                     E = run_explore(State);
                 }
                 if (E != SUCCESS) {
-                    call OpTab.free_record(Op);
+                    del_op(State);
                 }
                 break;
 
@@ -383,7 +385,7 @@ implementation {
             case PAYLOAD:
             case COLLECT:
                 assert(State->op.phase == WAIT_JOB);
-                call OpTab.free_record(State->op_rec);
+                del_op(State);
                 return;
 
             default:
@@ -399,7 +401,7 @@ implementation {
                 break;
 
             case WAIT_JOB:  /* End of operation! */
-                call OpTab.free_record(State->op_rec);
+                del_op(State);
                 break;
 
             case WAIT_BUILD:
@@ -491,7 +493,7 @@ implementation {
             case COLLECT:
                 E = update_rtab(State, Info->to, Prev, HopsFromDst);
                 if (E != SUCCESS) {
-                    call OpTab.free_record(State->op_rec);
+                    del_op(State);
                 }
                 break;
 
@@ -538,7 +540,7 @@ implementation {
             if (State->op.type == SEND) {
                 retry(State);
             } else {
-                call OpTab.free_record(State->op_rec);
+                del_op(State);
             }
             return;
         }
@@ -565,13 +567,13 @@ implementation {
                         State->op.phase = WAIT_JOB;
                     } else {
                         /* Else we terminate the operation right now */
-                        call OpTab.free_record(State->op_rec);
+                        del_op(State);
                     }
                 }
                 break;
 
             case COLLECT:
-                call OpTab.free_record(State->op_rec);
+                del_op(State);
                 break;
 
             case SEND:
@@ -579,7 +581,7 @@ implementation {
                 if (run_send(State, Hop->first_hop) == SUCCESS) {
                     State->op.phase = WAIT_JOB;
                 } else {
-                    call OpTab.free_record(State->op_rec);
+                    del_op(State);
                 }
                 break;
 
@@ -588,7 +590,7 @@ implementation {
                 if (fwd_payload(State, Hop->first_hop) == SUCCESS) {
                     State->op.phase = WAIT_JOB;
                 } else {
-                    call OpTab.free_record(State->op_rec);
+                    del_op(State);
                 }
                 break;
 
@@ -639,7 +641,7 @@ implementation {
 
             State = call OpTab.fetch_user_data(Op);
             if (State->op.type != NEW) {
-                call OpTab.free_record(Op);
+                del_op(State);
                 return Msg;
             }
 
@@ -648,7 +650,7 @@ implementation {
 
             if (call RTab.get_route[opid(State)](Info->to, &Entry)
                     != HERP_RT_SUBSCRIBED) {
-                call OpTab.free_record(Op);
+                del_op(State);
                 return Msg;
             }
 
