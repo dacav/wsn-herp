@@ -145,7 +145,7 @@ implementation {
         return E;
     }
 
-    static error_t new_explore (am_addr_t Target)
+    static error_t new_explore (am_addr_t Target, herp_opid_t OnBehalf)
     {
         route_state_t State;
         error_t Ret;
@@ -156,10 +156,7 @@ implementation {
         State->op.type = EXPLORE;
         State->explore.prev = TOS_NODE_ID;
 
-        opinfo_init(&State->explore.info,
-                    call OpTab.fetch_external_id(State->op_rec),
-                    TOS_NODE_ID,
-                    Target);
+        opinfo_init(&State->explore.info, OnBehalf, TOS_NODE_ID, Target);
 
         Ret = run_explore(State);
         if (Ret != SUCCESS) {
@@ -215,9 +212,7 @@ implementation {
             case HERP_RT_VERIFY:
             case HERP_RT_REACH:
                 /* Start a reach operation and retry later. */
-                Ret = new_explore(State->send.target);
-                if (Ret == SUCCESS) return retry(State);
-                return Ret;
+                return new_explore(State->send.target, opid(State));
 
             default:
                 assert(0);
@@ -404,8 +399,6 @@ implementation {
 
             case WAIT_JOB:  /* End of operation! */
                 del_op(State);
-                break;
-
             case WAIT_BUILD:
                 break;
 
@@ -521,6 +514,15 @@ implementation {
         return call Prot.send_data(State->send.msg, MsgLen, FirstHop);
     }
 
+    static void resume_send (herp_opid_t OpId)
+    {
+        herp_oprec_t Op = call OpTab.internal(OpId);
+        route_state_t State;
+
+        assert(Op != NULL);
+        retry( call OpTab.fetch_user_data(Op) );
+    }
+
     static error_t fwd_payload (route_state_t State, am_addr_t FirstHop)
     {
         return call Prot.fwd_payload(&State->payload.info,
@@ -561,7 +563,9 @@ implementation {
                      * operation, which we are not interested in */
                     return;
                 }
-                if (State->explore.prev != TOS_NODE_ID) {
+                if (State->explore.prev == TOS_NODE_ID) {
+                    resume_send(State->explore.info.ext_opid);
+                } else {
                     if (fwd_build(&State->explore, Hop) == SUCCESS) {
                         /* If success we wait for protocol confirmation. */
                         State->op.phase = WAIT_JOB;
