@@ -336,6 +336,7 @@ implementation {
                 State->op_rec = Op;
                 if (Info->to == TOS_NODE_ID) {
                     State->op.type = BUILD;
+                    State->op.phase = WAIT_JOB;
                     E = call Prot.send_build(opid(State), Info, Prev);
                 } else {
                     State->op.type = EXPLORE;
@@ -384,6 +385,7 @@ implementation {
                 signal AMSend.sendDone(State->send.msg, SUCCESS);
             case PAYLOAD:
             case COLLECT:
+            case BUILD:
                 assert(State->op.phase == WAIT_JOB);
                 del_op(State);
                 return;
@@ -557,8 +559,6 @@ implementation {
                 if (State->explore.info.to != Node) {
                     /* Got the record for a route, subscribed by this
                      * operation, which we are not interested in */
-
-                    assert(0);  // Does this really happen at this point?
                     return;
                 }
                 if (State->explore.prev != TOS_NODE_ID) {
