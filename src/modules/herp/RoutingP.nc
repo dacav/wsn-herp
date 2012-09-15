@@ -357,11 +357,17 @@ implementation {
 
                 break;
 
-            case COLLECT:   /* Byzantine */
-            case SEND:      /* Byzantine */
-            case PAYLOAD:   /* Byzantine */
+            /* Those cases could happen only because of late explore
+             * messages and byzantine behaviors.
+             *
+             * They've been tested to be possible (with assertions), now
+             * they can be ignored safely.
+             */
+            case COLLECT:
+            case SEND:
+            case PAYLOAD:
             default:
-                assert(0);
+                return;
         }
     }
 
@@ -478,10 +484,9 @@ implementation {
         switch (State->op.type) {
 
             case EXPLORE:
-                // TODO: change assertions in "byzantine" after testing.
-                assert(State->op.phase == WAIT_BUILD);
-                assert(Info->to == State->explore.info.to);
+                if (State->op.phase != WAIT_BUILD) return;
 
+                assert(Info->to == State->explore.info.to);
                 stop_timer(State);
                 State->op.phase = WAIT_ROUTE;
             case COLLECT:
@@ -552,7 +557,6 @@ implementation {
             case EXPLORE:
                 if (State->op.phase != WAIT_ROUTE) {
                     /* This is a stealed route. Some checks, then ignore. */
-                    assert(State->op.phase == WAIT_BUILD);
                     assert(State->explore.info.to != Node);
                     return;
                 }
