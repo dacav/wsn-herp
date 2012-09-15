@@ -29,8 +29,8 @@ implementation {
 
     AMSenderC.SubAMSend -> RealAMSenderC;
     AMSenderC.PacketAcknowledgements -> RealAMSenderC;
-    AMSenderC.Packet -> RealAMSenderC;
-    AMSenderC.AMPacket -> RealAMSenderC;
+    AMSenderC.SubPacket -> RealAMSenderC;
+    AMSenderC.SubAMPacket -> RealAMSenderC;
 #else
     components new AMSenderC(AM_ID);
 #endif

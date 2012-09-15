@@ -5,13 +5,15 @@ generic configuration AckAMSendC (uint8_t TRACK_SIZE) {
 
     provides {
         interface AMSend;
+        interface Packet;
+        interface AMPacket;
     }
 
     uses {
         interface AMSend as SubAMSend;
         interface PacketAcknowledgements;
-        interface Packet;
-        interface AMPacket;
+        interface Packet as SubPacket;
+        interface AMPacket as SubAMPacket;
     }
 
 }
@@ -23,13 +25,15 @@ implementation {
                new QueueC(message_t *, TRACK_SIZE);
 
     AMSend = AckAMSendP;
+    Packet = SubPacket;
+    AMPacket = SubAMPacket;
 
     AckAMSendP.HashTable -> HashTableC;
     AckAMSendP.Queue -> QueueC;
 
     AckAMSendP.SubAMSend = SubAMSend;
     AckAMSendP.PacketAck = PacketAcknowledgements;
-    AckAMSendP.Packet = Packet;
-    AckAMSendP.AMPacket = AMPacket;
+    AckAMSendP.Packet = SubPacket;
+    AckAMSendP.AMPacket = SubAMPacket;
 
 }
