@@ -19,20 +19,39 @@ implementation {
 
     sched_item_t sched;
 
-    command error_t Init.init () {
+    command error_t Init.init ()
+    {
+        sched_item_t Item;
+
         sched = NULL;
+
+        while (!call Pool.empty()) {
+            Item = call Pool.get();
+            Item->valid = 0;
+            Item->next = sched;
+            sched = Item;
+        }
+
+        while (sched != NULL) {
+            Item = sched;
+            sched = Item->next;
+            call Pool.put(Item);
+        }
+
         return SUCCESS;
     }
 
     default event void MultiTimer.fired[herp_opid_t] (event_data_t *) {}
 
-    command sched_item_t MultiTimer.schedule[herp_opid_t opid] (uint32_t T, event_data_t *D) {
+    command sched_item_t MultiTimer.schedule[herp_opid_t opid] (uint32_t T, event_data_t *D)
+    {
         sched_item_t fresh;
         sched_item_t cursor, pr;
         uint32_t now;
 
         fresh = call Pool.get();
         if (fresh == NULL) return NULL;
+        fresh->valid = 1;
 
         now = call BaseTimer.getNow();
 
@@ -96,6 +115,8 @@ implementation {
             }
         }
 
+        assert(E->valid);
+        E->valid = 0;
         call Pool.put(E);
     }
 
@@ -113,6 +134,9 @@ implementation {
             sched = sched->next;
 
             ed = (event_data_t *) e->store;
+
+            assert(e->valid == 1);
+            e->valid = 0;
             call Pool.put(e);
 
             signal MultiTimer.fired[e->id](ed);

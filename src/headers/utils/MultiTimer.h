@@ -10,7 +10,7 @@ struct sched_item {
     uint32_t time;
     void * store;
     herp_opid_t id;
-    bool active;
+    uint8_t valid : 1;
 };
 
 #endif // MULTI_TIMER_H
