@@ -197,7 +197,6 @@ implementation {
     static error_t send_fetch_route (route_state_t State)
     {
         herp_rtentry_t Entry;
-        error_t Ret;
 
         switch (call RTab.get_route[opid(State)](State->send.target,
                                                  &Entry)) {
@@ -517,7 +516,6 @@ implementation {
     static void resume_send (herp_opid_t OpId)
     {
         herp_oprec_t Op = call OpTab.internal(OpId);
-        route_state_t State;
 
         assert(Op != NULL);
         retry( call OpTab.fetch_user_data(Op) );
@@ -633,8 +631,8 @@ implementation {
             herp_oprec_t Op;
             route_state_t State;
             herp_rtentry_t Entry;
-       
-            if (!call PayloadPool.empty()) {
+
+            if (call PayloadPool.empty()) {
                 return Msg;
             }
 
@@ -648,6 +646,7 @@ implementation {
                 del_op(State);
                 return Msg;
             }
+            State->op_rec = Op;
 
             State->op.type = PAYLOAD;
             State->op.phase = WAIT_ROUTE;
@@ -662,7 +661,6 @@ implementation {
             State->payload.len = Len;
             State->payload.info = *Info;
             Msg = call PayloadPool.get();
-
         }
 
         return Msg;
