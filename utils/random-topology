@@ -1,0 +1,70 @@
+#!/usr/bin/env python
+
+'''{prog} - Generate random topologies
+
+Synopsis:
+    {prog} <number-of-nodes> <link-probability> [format]
+
+    where:
+        <number-of-nodes>: must be a positive integer and
+        <link-probability>: must be a probability value [0..1]
+        [format]: optionally "dot" or "herp" ("herp" by default)
+'''
+
+from __future__ import print_function, division
+import sys
+import itertools as it
+import random
+
+try: range = xrange
+except: pass
+
+def fmt_herp (links, out_file):
+    print(*("{0} {1}".format(x, y) for (x, y) in links),
+          sep='\n', file=out_file)
+
+def fmt_dot (links, out_file):
+    print("graph {", *("    {0} -- {1}".format(x, y) for (x, y) in links),
+                       sep='\n', file=out_file, end='\n}\n')
+
+def read_options (argv):
+    def print_help ():
+        print(__doc__.format(prog=argv[0]), sep='\n', file=sys.stderr)
+
+    if 'help' in argv or len(argv) < 3:
+        print_help()
+        sys.exit(1)
+    else:
+        try:
+            n_nodes = int(argv[1])
+            link_prob = float(argv[2])
+            assert(n_nodes > 0 and 0 <= link_prob <= 1)
+            formats = {
+                'herp' : fmt_herp,
+                'dot'  : fmt_dot
+            }
+            fmt = formats.get(argv[3] if len(argv) > 3 else "herp", None)
+            assert(fmt != None)
+            return n_nodes, link_prob, fmt
+        except Exception as E:
+            print("Wrong parameters (\"{0}\")".format(E),
+                  file=sys.stderr)
+            print_help()
+            sys.exit(1)
+
+def generate (n_nodes, link_prob):
+    return ((n0, n1) for n0 in range(n_nodes) \
+                     for n1 in range(n0, n_nodes) \
+                     if random.random() < link_prob and n0 != n1)
+
+def main (argv=None):
+    if not argv: argv = sys.argv
+
+    n_nodes, link_prob, fmt = read_options(argv)
+    links = generate(n_nodes, link_prob)
+    fmt(links, sys.stdout)
+
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main())
