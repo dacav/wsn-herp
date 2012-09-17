@@ -254,6 +254,14 @@ implementation {
         return RetVal;
     }
 
+    static void resume_send (herp_opid_t OpId)
+    {
+        herp_oprec_t Op = call OpTab.internal(OpId);
+
+        assert(Op != NULL);
+        retry( call OpTab.fetch_user_data(Op) );
+    }
+
     event void Timer.fired (route_state_t State)
     {
         assert(State->op.type == EXPLORE);
@@ -264,6 +272,11 @@ implementation {
             call RTab.drop_route[opid(State)](State->explore.job);
             State->explore.job = NULL;
         }
+
+        if (State->explore.prev == TOS_NODE_ID) {
+            resume_send(State->explore.info.ext_opid);
+        }
+        del_op(State);
     }
 
     static void set_explore_data (explore_state_t *Explore,
@@ -403,6 +416,7 @@ implementation {
                 break;
 
             case WAIT_JOB:  /* End of operation! */
+                assert(State->explore.prev != TOS_NODE_ID);
                 del_op(State);
             case WAIT_BUILD:
                 break;
@@ -516,14 +530,6 @@ implementation {
     {
         uint8_t MsgLen = call Packet.payloadLength(State->send.msg);
         return call Prot.send_data(State->send.msg, FirstHop);
-    }
-
-    static void resume_send (herp_opid_t OpId)
-    {
-        herp_oprec_t Op = call OpTab.internal(OpId);
-
-        assert(Op != NULL);
-        retry( call OpTab.fetch_user_data(Op) );
     }
 
     static error_t fwd_payload (route_state_t State, am_addr_t FirstHop)
@@ -647,7 +653,6 @@ implementation {
 
             State = call OpTab.fetch_user_data(Op);
             if (State->op.type != NEW) {
-                del_op(State);
                 return Msg;
             }
             State->op_rec = Op;
