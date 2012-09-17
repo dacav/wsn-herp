@@ -197,8 +197,7 @@ implementation {
         }
 
 #ifdef DUMP
-        dbg("RTab", "No more routes for %d\n", Entry->target);
-        dbg("RTab", "--------------------------------------\n");
+        dbg("RTab", "Routes(%d): Empty\n", Entry->target);
 #endif
     }
 
@@ -208,22 +207,20 @@ implementation {
             case BUILDING:
             case SEASONED:
 #ifdef DUMP
-                dbg("RTab", "Dead route for %d: <Node=%d, Hops=%d>\n",
+                dbg("RTab", "Routes(%d): D <Node=%d, Hops=%d>\n",
                     Route->ref->target,
                     Route->hop.first_hop,
                     Route->hop.n_hops);
-                dbg("RTab", "--------------------------------------\n");
 #endif
                 Route->state = DEAD;
                 enqueue(Route->ref);
                 break;
             case FRESH:
 #ifdef DUMP
-                dbg("RTab", "Seasoned route for %d: <Node=%d, Hops=%d>\n",
+                dbg("RTab", "Routes(%d): S <Node=%d, Hops=%d>\n",
                     Route->ref->target,
                     Route->hop.first_hop,
                     Route->hop.n_hops);
-                dbg("RTab", "--------------------------------------\n");
 #endif
                 mark_seasoned(Route);
                 break;
@@ -385,9 +382,8 @@ implementation {
         copy_hop(&Route->hop, Hop);
 
 #ifdef DUMP
-        dbg("RTab", "New route to %d: <Node=%d, Hops=%d>\n",
+        dbg("RTab", "Routes(%d): F <Node=%d, Hops=%d>\n",
             Route->ref->target, Hop->first_hop, Hop->n_hops);
-        dbg("RTab", "--------------------------------------\n");
 #endif
 
         Entry = Route->ref;
