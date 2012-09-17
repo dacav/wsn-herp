@@ -17,7 +17,7 @@ module DumpAMP {
 
 implementation {
 
-    static void dump_message (message_t *Msg) {
+    static void dump_message (message_t *Msg, uint8_t Len) {
         herp_msg_t *HMsg;
         header_t *Hdr;
         const char * StrRep;
@@ -43,6 +43,7 @@ implementation {
         }
         dbg("Prot", "\tSrc=%d (OpId=%d)\n", Hdr->from, Hdr->op.id);
         dbg("Prot", "\tDst=%d\n", Hdr->to);
+        dbg("Prot", "\tLen=%d\n", Len);
         dbg("Prot", "\tType=%s\n", StrRep);
         if (Hdr->op.type != USER_DATA) {
             dbg("Prot", "\t\tPrev=%d\n", HMsg->data.path.prev);
@@ -68,7 +69,7 @@ implementation {
 
         E = call SubAMSend.send(Addr, Msg, Len);
         dbg("Prot", "Sending message:\n");
-        dump_message(Msg);
+        dump_message(Msg, Len);
         dbg("Prot", "\tSendingTo=%d (%s)\n", Addr,
                     E == SUCCESS ? "Success" : "Fail");
         dbg("Prot", "--------------------------------------\n");
@@ -82,7 +83,7 @@ implementation {
     event message_t * SubReceive.receive (message_t *Msg, void * Payload,
                                        uint8_t Len) {
         dbg("Prot", "Received message:\n");
-        dump_message(Msg);
+        dump_message(Msg, Len);
         dbg("Prot", "--------------------------------------\n");
 
         return signal Receive.receive(Msg, Payload, Len);

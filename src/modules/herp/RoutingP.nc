@@ -515,7 +515,7 @@ implementation {
     static error_t run_send (route_state_t State, am_addr_t FirstHop)
     {
         uint8_t MsgLen = call Packet.payloadLength(State->send.msg);
-        return call Prot.send_data(State->send.msg, MsgLen, FirstHop);
+        return call Prot.send_data(State->send.msg, FirstHop);
     }
 
     static void resume_send (herp_opid_t OpId)

@@ -5,6 +5,7 @@ generic configuration RoutingC(am_id_t AM_ID) {
 
     provides {
         interface AMSend;
+        interface AMPacket;
         interface Receive;
 
         interface SplitControl as AMControl;
@@ -25,6 +26,7 @@ implementation {
         new QueueC(route_state_t, HERP_MAX_OPERATIONS);
 
     AMSend = RoutingP;
+    AMPacket = ProtocolC;
     Receive = RoutingP;
     AMControl = ProtocolC;
     Packet = ProtocolC;

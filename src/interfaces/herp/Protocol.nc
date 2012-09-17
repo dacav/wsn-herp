@@ -40,8 +40,7 @@ interface Protocol {
      * @retval The same as AMSend.send() on success;
      * @retval ENOMEM if there are not enough resources to send the message.
      */
-    command error_t send_data (message_t *Msg, uint8_t MsgLen,
-                               am_addr_t FirstHop);
+    command error_t send_data (message_t *Msg, am_addr_t FirstHop);
 
     event void done_local (herp_opid_t OpId, error_t E);
 

@@ -110,15 +110,14 @@ implementation {
         return SUCCESS;
     }
 
-    command error_t Protocol.send_data (message_t *Msg, uint8_t MsgLen,
-                                        am_addr_t FirstHop) {
+    command error_t Protocol.send_data (message_t *Msg, am_addr_t FirstHop) {
         error_t RetVal;
+        uint8_t MsgLen;
 
         Msg = msg_dup(Msg);
         if (Msg == NULL) return ENOMEM;
-        MsgLen += sizeof(header_t);
 
-        call SubPacket.setPayloadLength(Msg, MsgLen);
+        MsgLen = call Packet.payloadLength(Msg) + sizeof(header_t);
         RetVal = call Send.send(FirstHop, Msg, MsgLen);
         if (RetVal != SUCCESS){
             call MsgPool.put(Msg);
