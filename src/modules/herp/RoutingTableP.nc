@@ -36,11 +36,13 @@ implementation {
 
     /* -- Events & Commands from interfaces --------------------------- */
 
-    command const herp_rthop_t * RTab.get_hop [herp_opid_t OpId](const herp_rtroute_t Route) {
+    command const herp_rthop_t * RTab.get_hop [herp_opid_t OpId](const herp_rtroute_t Route)
+    {
         return &Route->hop;
     }
 
-    command herp_rtres_t RTab.get_route [herp_opid_t OpId](am_addr_t Node, herp_rtentry_t *Out) {
+    command herp_rtres_t RTab.get_route [herp_opid_t OpId](am_addr_t Node, herp_rtentry_t *Out)
+    {
         herp_rtentry_t Entry;
         scan_t Found;
 
@@ -62,7 +64,8 @@ implementation {
         return Found.seasoned ? HERP_RT_VERIFY : HERP_RT_REACH;
     }
 
-    command herp_rtroute_t RTab.get_job [herp_opid_t OpId](herp_rtentry_t Entry) {
+    command herp_rtroute_t RTab.get_job [herp_opid_t OpId](herp_rtentry_t Entry)
+    {
         scan_t Found;
 
         if (Entry == NULL) return NULL;
@@ -79,7 +82,8 @@ implementation {
         return NULL;
     }
 
-    command herp_rtres_t RTab.drop_job [herp_opid_t OpId](herp_rtroute_t Route) {
+    command herp_rtres_t RTab.drop_job [herp_opid_t OpId](herp_rtroute_t Route)
+    {
         if (!Route->ref->valid) {
             return HERP_RT_ERROR;
         }
@@ -93,7 +97,8 @@ implementation {
         return HERP_RT_SUCCESS;
     }
 
-	command herp_rtres_t RTab.new_route [herp_opid_t OpId](am_addr_t Node, const herp_rthop_t *Hop) {
+	command herp_rtres_t RTab.new_route [herp_opid_t OpId](am_addr_t Node, const herp_rthop_t *Hop)
+    {
         herp_rtentry_t Entry;
         herp_rtroute_t Selected;
         int i;
@@ -129,7 +134,8 @@ implementation {
 
     }
 
-	command herp_rtres_t RTab.update_route [herp_opid_t OpId](herp_rtroute_t Route, const herp_rthop_t *Hop) {
+	command herp_rtres_t RTab.update_route [herp_opid_t OpId](herp_rtroute_t Route, const herp_rthop_t *Hop)
+    {
 
         if (!Route->ref->valid) {
             return HERP_RT_ERROR;
@@ -144,7 +150,8 @@ implementation {
 
     }
 
-    command herp_rtres_t RTab.drop_route [herp_opid_t OpId](herp_rtroute_t ToDrop) {
+    command herp_rtres_t RTab.drop_route [herp_opid_t OpId](herp_rtroute_t ToDrop)
+    {
         if (ToDrop->state != BUILDING || ToDrop->owner != OpId) {
             return HERP_RT_ERROR;
         }
@@ -156,17 +163,20 @@ implementation {
         return HERP_RT_SUCCESS;
     }
 
-    event hash_index_t Table.key_hash (const am_addr_t *Key) {
+    event hash_index_t Table.key_hash (const am_addr_t *Key)
+    {
         return *Key;
     }
 
     event bool Table.key_equal (const am_addr_t *Key1,
-                                const am_addr_t *Key2) {
+                                const am_addr_t *Key2)
+    {
         return (*Key1) == (*Key2);
     }
 
     event error_t Table.value_init (const am_addr_t *Target,
-                                    herp_rtentry_t Entry) {
+                                    herp_rtentry_t Entry)
+    {
         int i;
 
         memset((void *)Entry, 0, sizeof(herp_rtentry_t));
@@ -181,7 +191,8 @@ implementation {
     }
 
     event void Table.value_dispose (const am_addr_t *Target,
-                                    herp_rtentry_t Entry) {
+                                    herp_rtentry_t Entry)
+    {
         int i;
 
         assert(Entry->subscr == NULL && Entry->valid);
@@ -201,7 +212,8 @@ implementation {
 #endif
     }
 
-    event void MultiTimer.fired (herp_rtroute_t Route) {
+    event void MultiTimer.fired (herp_rtroute_t Route)
+    {
         Route->sched = NULL;
         switch (Route->state) {
             case BUILDING:
@@ -231,7 +243,8 @@ implementation {
 
     /* -- Deliver queue management ------------------------------------ */
 
-    task void deliver_task () {
+    task void deliver_task ()
+    {
         herp_rtres_t Outcome;
         herp_rtentry_t Entry;
         herp_rthop_t *Hop;
@@ -273,7 +286,8 @@ implementation {
 
     /* -- Misc utility functions -------------------------------------- */
 
-    static bool subscribe (herp_rtentry_t Entry, herp_opid_t OpId) {
+    static bool subscribe (herp_rtentry_t Entry, herp_opid_t OpId)
+    {
         subscr_item_t New;
 
         New = call SubscrPool.get();
@@ -286,7 +300,8 @@ implementation {
         return TRUE;
     }
 
-    static bool enqueue (herp_rtentry_t Entry) {
+    static bool enqueue (herp_rtentry_t Entry)
+    {
         if (Entry->enqueued) return TRUE;
 
         if (call Delivers.enqueue(Entry) != SUCCESS) return FALSE;
@@ -299,7 +314,8 @@ implementation {
         return TRUE;
     }
 
-    static void scan (herp_rtentry_t Entry, scan_t *Out) {
+    static void scan (herp_rtentry_t Entry, scan_t *Out)
+    {
         int i;
         const uint16_t start = Entry->scan_start;
 
@@ -329,7 +345,8 @@ implementation {
         Entry->scan_start ++;
     }
 
-    static void set_timer (herp_rtroute_t Route, uint32_t T) {
+    static void set_timer (herp_rtroute_t Route, uint32_t T)
+    {
 
         if (Route->sched) {
             call MultiTimer.nullify(Route->sched);
@@ -340,22 +357,26 @@ implementation {
             : NULL;
     }
 
-    static void mark_building (herp_rtroute_t Route, herp_opid_t OpId) {
+    static void mark_building (herp_rtroute_t Route, herp_opid_t OpId)
+    {
         Route->state = BUILDING;
         Route->owner = OpId;
         set_timer(Route, HERP_RT_TIME_BUILDING);
     }
 
-    static void mark_seasoned (herp_rtroute_t Route) {
+    static void mark_seasoned (herp_rtroute_t Route)
+    {
         Route->state = SEASONED;
         set_timer(Route, HERP_RT_TIME_SEASONED);
     }
 
-    static void copy_hop (herp_rthop_t *Dst, const herp_rthop_t *Src) {
+    static void copy_hop (herp_rthop_t *Dst, const herp_rthop_t *Src)
+    {
         memcpy((void *)Dst, (const void *)Src, sizeof(herp_rthop_t));
     }
 
-    static void check_useful (herp_rtentry_t Entry) {
+    static void check_useful (herp_rtentry_t Entry)
+    {
         scan_t Found;
 
         assert(!Entry->enqueued);
@@ -374,7 +395,8 @@ implementation {
     }
 
     static bool init_route (herp_rtroute_t Route, const herp_rthop_t *Hop,
-                            herp_opid_t OpId) {
+                            herp_opid_t OpId)
+    {
         herp_rtentry_t Entry;
 
         Route->state = FRESH;
