@@ -135,11 +135,10 @@ implementation {
 
             ed = (event_data_t *) e->store;
 
-            assert(e->valid == 1);
+            assert(e->valid);
+            signal MultiTimer.fired[e->id](ed);
             e->valid = 0;
             call Pool.put(e);
-
-            signal MultiTimer.fired[e->id](ed);
 
         } while (sched && sched->time == now);
 
