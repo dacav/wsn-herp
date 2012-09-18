@@ -274,6 +274,7 @@ implementation {
         }
 
         if (State->explore.prev == TOS_NODE_ID) {
+            State->explore.prev = AM_BROADCAST_ADDR;
             resume_send(State->explore.info.ext_opid);
         }
         del_op(State);
@@ -417,6 +418,7 @@ implementation {
 
             case WAIT_JOB:  /* End of operation! */
                 assert(State->explore.prev != TOS_NODE_ID);
+                assert(State->explore.prev != AM_BROADCAST_ADDR);
                 del_op(State);
             case WAIT_BUILD:
                 break;
@@ -572,15 +574,14 @@ implementation {
                     return;
                 }
                 if (State->explore.prev == TOS_NODE_ID) {
+                    State->explore.prev = AM_BROADCAST_ADDR;
                     resume_send(State->explore.info.ext_opid);
+                } else if (State->explore.prev != AM_BROADCAST_ADDR
+                           && fwd_build(&State->explore, Hop) == SUCCESS) {
+                    /* If success we wait for protocol confirmation. */
+                    State->op.phase = WAIT_JOB;
                 } else {
-                    if (fwd_build(&State->explore, Hop) == SUCCESS) {
-                        /* If success we wait for protocol confirmation. */
-                        State->op.phase = WAIT_JOB;
-                    } else {
-                        /* Else we terminate the operation right now */
-                        del_op(State);
-                    }
+                    del_op(State);
                 }
                 break;
 
