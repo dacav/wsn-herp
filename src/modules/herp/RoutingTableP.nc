@@ -101,14 +101,22 @@ implementation {
     {
         herp_rtentry_t Entry;
         herp_rtroute_t Selected;
+        herp_rtroute_t WorstFresh;
         int i;
 
         Entry = call Table.get_item(&Node, FALSE);
         if (Entry == NULL) return HERP_RT_ERROR;
 
         Selected = NULL;
+        WorstFresh = NULL;
         for (i = 0; i < HERP_MAX_ROUTES; i ++) {
             herp_rtroute_t R = &(Entry->routes[i]);
+
+            if (R->state == FRESH) {
+                if (!WorstFresh || WorstFresh->hop.n_hops < R->hop.n_hops) {
+                    WorstFresh = R;
+                }
+            }
 
             if (R->hop.first_hop == Hop->first_hop) {
                 if (R->hop.n_hops > Hop->n_hops || R->state != FRESH) {
@@ -124,7 +132,8 @@ implementation {
             Selected = Found.dead ? Found.dead
                      : Found.seasoned ? Found.seasoned
                      : Found.building ? Found.building
-                     : NULL;
+                     : WorstFresh;
+            /* TODO: think of better strategy */
         }
 
         assert(Selected != NULL);
