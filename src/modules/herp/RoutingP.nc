@@ -173,10 +173,15 @@ implementation {
         assert(call RetryQueue.empty() == FALSE);
         State = call RetryQueue.dequeue();
 
-        E = send_fetch_route(State);
-        if (E != SUCCESS) {
-            signal AMSend.sendDone(State->send.msg, E);
-            del_op(State);
+        if (State->send.retry) {
+            E = send_fetch_route(State);
+            if (E != SUCCESS) {
+                dbg("Out", "Giving up...\n");
+                signal AMSend.sendDone(State->send.msg, E);
+                del_op(State);
+            }
+        } else {
+            signal AMSend.sendDone(State->send.msg, FAIL);
         }
     }
 
@@ -184,8 +189,7 @@ implementation {
     {
         error_t Ret;
 
-        if (State->send.retry == 0) return FAIL;
-
+        assert(State->send.retry > 0);
         Ret = call RetryQueue.enqueue(State);
         if (Ret == SUCCESS) {
             State->send.retry --;
@@ -243,7 +247,7 @@ implementation {
 
         State->send.msg = Msg;
         State->send.target = Addr;
-        State->send.retry = HERP_MAX_RETRY + 1;
+        State->send.retry = HERP_MAX_RETRY;
 
         /* -- Start the send process ---------------------------------- */
 
