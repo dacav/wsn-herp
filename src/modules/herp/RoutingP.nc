@@ -168,20 +168,17 @@ implementation {
     task void send_retry_task ()
     {
         route_state_t State;
-        error_t E;
+        error_t E = FAIL;
 
         assert(call RetryQueue.empty() == FALSE);
         State = call RetryQueue.dequeue();
 
         if (State->send.retry) {
             E = send_fetch_route(State);
-            if (E != SUCCESS) {
-                dbg("Out", "Giving up...\n");
-                signal AMSend.sendDone(State->send.msg, E);
-                del_op(State);
-            }
-        } else {
-            signal AMSend.sendDone(State->send.msg, FAIL);
+        }
+        if (E != SUCCESS) {
+            signal AMSend.sendDone(State->send.msg, E);
+            del_op(State);
         }
     }
 
