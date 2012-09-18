@@ -117,7 +117,7 @@ implementation {
         Msg = msg_dup(Msg);
         if (Msg == NULL) return ENOMEM;
 
-        MsgLen = call Packet.payloadLength(Msg) + sizeof(header_t);
+        MsgLen = call SubPacket.payloadLength(Msg);
         RetVal = call Send.send(FirstHop, Msg, MsgLen);
         if (RetVal != SUCCESS){
             call MsgPool.put(Msg);
@@ -193,7 +193,7 @@ implementation {
         Msg = msg_dup(Msg);
         if (Msg == NULL) return ENOMEM;
 
-        RetVal = call Send.send(Next, Msg, Len);
+        RetVal = call Send.send(Next, Msg, Len + sizeof(header_t));
         if (RetVal != SUCCESS) {
             call MsgPool.put(Msg);
         }
