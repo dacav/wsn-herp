@@ -491,6 +491,7 @@ implementation {
 
         if (State->op.type == NEW) {
             State->op.type = COLLECT;
+            State->op_rec = Op;
         }
 
         if (Prev != Info->to) {
@@ -576,6 +577,7 @@ implementation {
                 if (State->explore.prev == TOS_NODE_ID) {
                     State->explore.prev = AM_BROADCAST_ADDR;
                     resume_send(State->explore.info.ext_opid);
+                    del_op(State);
                 } else if (State->explore.prev != AM_BROADCAST_ADDR
                            && fwd_build(&State->explore, Hop) == SUCCESS) {
                     /* If success we wait for protocol confirmation. */
