@@ -247,8 +247,6 @@ implementation {
     /* -- Internal functions ----------------------------------------- */
 
     static inline herp_msg_t * msg_unwrap (message_t *Msg, uint8_t Len) {
-
-        call SubPacket.setPayloadLength(Msg, Len);
         return (herp_msg_t *) call SubPacket.getPayload(Msg, Len);
     }
 
