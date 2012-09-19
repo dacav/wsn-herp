@@ -258,6 +258,7 @@ implementation {
         }
 
         State = new_op();
+        if (State == NULL) return ENOMEM;
 
         assert(State->op.type == NEW &&
                State->op.phase == START);
