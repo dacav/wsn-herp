@@ -576,10 +576,12 @@ implementation {
     event void RTab.deliver [herp_opid_t OpId](herp_rtres_t Out, am_addr_t Node,
                                                const herp_rthop_t *Hop)
     {
-        herp_oprec_t Op = call OpTab.internal(OpId);
+        herp_oprec_t Op;
         route_state_t State;
 
-        assert(Op != NULL);
+        Op = call OpTab.internal(OpId);
+        if (Op == NULL) return;
+
         State = call OpTab.fetch_user_data(Op);
 
         if (Out != HERP_RT_SUCCESS) {
