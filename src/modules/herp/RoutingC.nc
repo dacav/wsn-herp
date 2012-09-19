@@ -23,7 +23,8 @@ implementation {
         new RoutingTableC(HERP_MAX_OPERATIONS, HERP_MAX_NODES),
         new MultiTimerC(struct route_state, HERP_MAX_OPERATIONS),
         new PoolC(message_t, HERP_MAX_NODES),
-        new QueueC(route_state_t, HERP_MAX_OPERATIONS);
+        new QueueC(route_state_t, HERP_MAX_OPERATIONS) as RetryQueue,
+        new QueueC(message_t *, HERP_MAX_LOOPBACK) as LoopBackQueue;
 
     AMSend = RoutingP;
     AMPacket = ProtocolC;
@@ -39,6 +40,7 @@ implementation {
     RoutingP.TimerDelay -> ProtocolC;
     RoutingP.Timer -> MultiTimerC.MultiTimer[unique("HerpMT")];
     RoutingP.PayloadPool -> PoolC;
-    RoutingP.RetryQueue -> QueueC;
+    RoutingP.RetryQueue -> RetryQueue;
+    RoutingP.LoopBackQueue -> LoopBackQueue;
 
 }

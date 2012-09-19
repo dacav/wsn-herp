@@ -21,6 +21,7 @@
 #define HERP_RT_TIME_SEASONED   (5 * 1024) /* SEASONED to DEAD */
 
 #define HERP_MAX_OPERATIONS 20
+#define HERP_MAX_LOOPBACK 3
 
 #endif // CONSTANTS_H
 

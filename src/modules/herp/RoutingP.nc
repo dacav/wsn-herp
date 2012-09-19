@@ -23,6 +23,7 @@ module RoutingP {
         interface MultiTimer<struct route_state> as Timer;
         interface Pool<message_t> as PayloadPool;
         interface Queue<route_state_t> as RetryQueue;
+        interface Queue<message_t *> as LoopBackQueue;
     }
 
 }
@@ -220,10 +221,41 @@ implementation {
         };
     }
 
+    task void loopback_task ()
+    {
+        assert(!call LoopBackQueue.empty());
+
+        do {
+            message_t *Msg = call LoopBackQueue.dequeue();
+            uint8_t Len = call Packet.payloadLength(Msg);
+            void *Payload = call Packet.getPayload(Msg, Len);
+
+            signal Receive.receive(Msg, Payload, Len);
+            signal AMSend.sendDone(Msg, SUCCESS);
+
+        } while (call LoopBackQueue.size() > 0);
+    }
+
+    static error_t loopback (message_t *Msg)
+    {
+        error_t Ret = call LoopBackQueue.enqueue(Msg);
+
+        if (Ret == SUCCESS && call LoopBackQueue.size() == 1) {
+            post loopback_task();
+        }
+        return Ret;
+    }
+
     command error_t AMSend.send (am_addr_t Addr, message_t *Msg, uint8_t Len)
     {
         route_state_t State;
         error_t RetVal;
+
+        call Packet.setPayloadLength(Msg, Len);
+
+        if (Addr == TOS_NODE_ID) {
+            return loopback(Msg);
+        }
 
         State = new_op();
 
@@ -239,8 +271,6 @@ implementation {
             del_op(State);
             return RetVal;
         }
-
-        call Packet.setPayloadLength(Msg, Len);
 
         State->send.msg = Msg;
         State->send.target = Addr;
