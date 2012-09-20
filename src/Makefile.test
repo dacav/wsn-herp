@@ -1,0 +1,16 @@
+.phony : all clean
+
+ifndef TOSROOT
+$(error TOSROOT not defined)
+endif
+
+CXXFLAGS := -std=c++0x
+CPPFLAGS := -I $(TOSROOT)/tos/lib/tossim/
+LDFLAGS := -L simbuild/micaz/
+
+all: test
+
+test: $(addprefix simbuild/micaz/, tossim.o sim.o c-support.o)
+
+clean:
+	rm -f Test.o Test
