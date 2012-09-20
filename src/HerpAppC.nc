@@ -5,16 +5,23 @@ configuration HerpAppC {}
 
 implementation {
 
-    components MainC, HerpC;
-    components new RoutingC(5);
-    components new TimerMilliC();
+    components
+        MainC,
+        HerpC,
+        new RoutingC(5),
+        new TimerMilliC(),
+        RandomC,
+        new PoolC(message_t, 10);
 
-    HerpC.Send -> RoutingC;
+    HerpC.AMSend -> RoutingC;
+    HerpC.AMPacket -> RoutingC;
     HerpC.Receive -> RoutingC;
     HerpC -> MainC.Boot;
     HerpC.Radio -> RoutingC;
     HerpC.Packet -> RoutingC;
+    HerpC.Random -> RandomC;
     HerpC.Timer -> TimerMilliC;
+    HerpC.Messages -> PoolC;
 
 }
 
