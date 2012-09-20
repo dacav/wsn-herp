@@ -32,13 +32,14 @@ def main (argv=None):
         nodes[who][which] = how
     f.close()
 
+    bool_to_fmt = lambda b : "{0:2d}" if b else "  "
     for id in nodes:
         n = nodes[id]
         keys = n.keys()
         keys.sort()
-        print('Used operation ids for node {0}'.format(id))
-        for k in keys:
-            if n[k]: print("    opid {0:2d}".format(k))
+        print('Node {0}:'.format(id), end=': ')
+        to_show = (bool_to_fmt(n[k]).format(k) for k in keys)
+        print(*to_show, sep=" ", end='\n')
     return 0
 
 if __name__ == '__main__':
