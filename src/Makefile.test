@@ -1,4 +1,4 @@
-.phony : all clean
+.phony : all remake clean
 
 ifndef TOSROOT
 $(error TOSROOT not defined)
@@ -10,7 +10,10 @@ LDFLAGS := -L simbuild/micaz/
 
 all: test
 
-test: $(addprefix simbuild/micaz/, tossim.o sim.o c-support.o)
+remake:
+	$(MAKE) -f Makefile micaz sim
+
+test: remake $(addprefix simbuild/micaz/, tossim.o sim.o c-support.o)
 
 clean:
 	rm -f Test.o Test
