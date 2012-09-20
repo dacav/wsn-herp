@@ -92,7 +92,8 @@ implementation {
         return fresh;
     }
 
-    command void MultiTimer.nullify[herp_opid_t opid] (sched_item_t E) {
+    command void MultiTimer.nullify[herp_opid_t opid] (sched_item_t E)
+    {
         sched_item_t nx;
 
         assert(E->id == opid);
@@ -120,7 +121,8 @@ implementation {
         call Pool.put(E);
     }
 
-    event void BaseTimer.fired () {
+    event void BaseTimer.fired ()
+    {
         uint32_t now;
 
         assert(sched != NULL);
