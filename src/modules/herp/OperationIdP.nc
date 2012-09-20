@@ -55,7 +55,10 @@ implementation {
     command error_t OperationId.get (herp_opid_t * Id) {
         uint16_t p, n;
 
-        if (!available) return EBUSY;
+        if (!available) {
+            dbg("OpId", "!!! Out of opids !!!");
+            return EBUSY;
+        }
 
         p = slots[first_free].prev;
         n = slots[first_free].next;
@@ -67,12 +70,17 @@ implementation {
         *Id = first_free;
         first_free = n;
 
+        dbg("OpId", "%d in use\n", *Id);
+
         return SUCCESS;
     }
 
     command error_t OperationId.put (herp_opid_t Id) {
         if (Id >= SIZE) return EINVAL;
-        if (call Free.get(Id)) return EALREADY;
+        if (call Free.get(Id)) {
+            dbg("OpId", "Double free!\n");
+            return EALREADY;
+        }
 
         if (available) {
             slots[Id].next = slots[first_free].next;
@@ -86,6 +94,8 @@ implementation {
         call Free.toggle(Id);
         first_free = Id;
         available ++;
+
+        dbg("OpId", "%d free!\n", Id);
 
         return SUCCESS;
     }

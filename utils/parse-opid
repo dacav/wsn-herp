@@ -1,0 +1,46 @@
+#!/usr/bin/env python
+
+from __future__ import print_function, division
+import sys
+import re
+import itertools as it
+from collections import defaultdict as ddict
+
+try: range = xrange
+except: pass
+
+def parse (f):
+    pat = re.compile(r'^DEBUG \((\d+)\): (\d+) (.*)$')
+    def mkev (row):
+        try:
+            who, which, how = re.match(pat, row).groups()
+            return (int(who), int(which), True if 'use' in how else False)
+        except Exception as E:
+            raise Exception("{0} for {1}".format(E, row))
+    return (mkev(row) for row in f)
+
+def main (argv=None):
+    if not argv: argv = sys.argv
+
+    if len(argv) < 2:
+        print("Need log file for operations", file=sys.stderr)
+        sys.exit(1)
+
+    nodes = ddict(dict)
+    f = open(argv[1])
+    for (who, which, how) in parse(f):
+        nodes[who][which] = how
+    f.close()
+
+    for id in nodes:
+        n = nodes[id]
+        keys = n.keys()
+        keys.sort()
+        print('Used operation ids for node {0}'.format(id))
+        for k in keys:
+            if n[k]: print("    opid {0:2d}".format(k))
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main())
+
