@@ -2,6 +2,7 @@
 
 from __future__ import print_function, division
 import sys, os
+from collections import deque
 import itertools as it
 import time
 
@@ -70,12 +71,24 @@ def main (argv=None):
 
     topology = Topology.load_file('topology')
 
-    log = open('what-happens.txt', 'wt')
+    files = deque()
+    def new_file (name):
+        ret = open(name, 'wt')
+        files.append(ret)
+        return ret
+
+    rtab = new_file('rtab.log')
+    prot = new_file('prot.log')
+    opid = new_file('opid.log')
+    stats = new_file('stats.log')
+    out = sys.stdout #new_file('out.log')
 
     T = Tossim([])
-    T.addChannel('Prot', log)
-    T.addChannel('RTab', log);
-    T.addChannel('Out', sys.stdout);
+    T.addChannel('Stats', stats)
+    T.addChannel('Prot', prot)
+    T.addChannel('RTab', rtab);
+    T.addChannel('OpId', opid)
+    T.addChannel('Out', out)
 
     R = T.radio()
 
@@ -92,14 +105,13 @@ def main (argv=None):
     try:
         for i in it.count():
             T.runNextEvent();
-            #time.sleep(0.25)
-            if i == 3000:
-                break;
+            time.sleep(0.05)
+            if not i % 100: print("{0:5d}".format(i), end='\n')
     except KeyboardInterrupt:
-        print('Terminated.')
+        print('\nTerminated.')
     finally:
-        log.close()
-        print('Also everything fine...')
+        for f in files: f.close()
+        print('\nBye...')
 
 if __name__ == '__main__':
     sys.exit(main())
