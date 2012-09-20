@@ -23,7 +23,8 @@ def main (argv=None):
     if not argv: argv = sys.argv
 
     if len(argv) < 2:
-        print("Need log file for operations (usually `opid.log`)", file=sys.stderr)
+        print("Need log file for operations (usually `opid.log`)",
+              file=sys.stderr)
         sys.exit(1)
 
     nodes = ddict(dict)
@@ -37,7 +38,7 @@ def main (argv=None):
         n = nodes[id]
         keys = n.keys()
         keys.sort()
-        print('Node {0}:'.format(id), end=': ')
+        print('Node {0}'.format(id), end=': ')
         to_show = (bool_to_fmt(n[k]).format(k) for k in keys)
         print(*to_show, sep=" ", end='\n')
     return 0
