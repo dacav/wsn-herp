@@ -23,7 +23,7 @@ def main (argv=None):
     if not argv: argv = sys.argv
 
     if len(argv) < 2:
-        print("Need log file for operations", file=sys.stderr)
+        print("Need log file for operations (usually `opid.log`)", file=sys.stderr)
         sys.exit(1)
 
     nodes = ddict(dict)
