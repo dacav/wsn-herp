@@ -706,6 +706,7 @@ implementation {
             State->payload.len = Len;
             State->payload.info = *Info;
             Msg = call PayloadPool.get();
+            assert(Msg != NULL);
         }
 
         return Msg;

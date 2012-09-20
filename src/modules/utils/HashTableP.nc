@@ -67,9 +67,11 @@ implementation {
         }
 
         new_key = call KeyPool.get();
+        assert(new_key != NULL);
         memcpy((void *) new_key, (const void *)Key, sizeof(key_t));
 
         new_slot = call SlotPool.get();
+        assert(new_slot != NULL);
         new_slot->key = (void *) new_key;
         new_slot->value = (void *) new_value;
         new_slot->next = *start;
