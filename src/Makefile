@@ -1,15 +1,22 @@
-CFLAGS += -I/usr/include/python2.6/
-CFLAGS += -Wall -Wfatal-errors -Wswitch-default -Wunreachable-code
+.PHONY : all tos clean
 
-CFLAGS += $(addprefix -I, $(shell find interfaces -type d))
-CFLAGS += $(addprefix -I, $(shell find headers -type d))
-CFLAGS += $(addprefix -I, $(shell find modules -type d))
 
-CFLAGS += -DDUMP
+ifndef TOSROOT
+$(error TOSROOT not defined)
+endif
 
-LDFLAGS += -Lmodules
+CC := c++
+CXXFLAGS := -std=c++0x
+CPPFLAGS := -I $(TOSROOT)/tos/lib/tossim/
+LDFLAGS := -L simbuild/micaz/
 
-CFLAGS += -D_TXOP_PACKED
+all: tos test
 
-COMPONENT=HerpAppC
-include $(MAKERULES)
+test: test.o $(addprefix simbuild/micaz/, tossim.o sim.o c-support.o)
+
+tos:
+	$(MAKE) -f Makefile.tinyos micaz sim
+
+clean:
+	$(MAKE) -f Makefile.tinyos clean
+	rm -f test.o test
