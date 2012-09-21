@@ -33,7 +33,7 @@ interface RoutingTable {
      * @retval RT_OK on success;
      * @retval RT_FAIL on failure.
      */
-    command rt_res_t add_route (am_addr_t To, const rt_route_t Route);
+    command rt_res_t add_route (am_addr_t To, const rt_route_t *Route);
 
     /**
      *
@@ -58,6 +58,6 @@ interface RoutingTable {
      *            get_route();
      */
     event void deliver (herp_opid_t OpId, rt_res_t Res, am_addr_t To,
-                        const rt_route_t Route);
+                        const rt_route_t *Route);
 
 }

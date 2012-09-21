@@ -24,7 +24,7 @@ implementation {
     {
         int i;
 
-        memset(&Find, 0, sizeof(struct rt_find));
+        memset(Find, 0, sizeof(struct rt_find));
         for (i = 0; i < HERP_MAX_ROUTES; i ++) {
             rt_entry_t Entry = &Node->entries[i];
 
@@ -46,6 +46,7 @@ implementation {
 
     command rt_res_t RTab.get_route (am_addr_t To, rt_route_t *Out)
     {
+        int i =0 ;
         rt_node_t Node;
         struct rt_find Found;
 
@@ -76,7 +77,7 @@ implementation {
     {
         rt_node_t Node;
 
-        Node = call Table.get_item(To, FALSE);
+        Node = call Table.get_item(&To, FALSE);
         if (Node == NULL) return RT_FAIL;
         if (Node->job_running) return RT_WORKING;
         Node->job_running = 1;
@@ -84,14 +85,77 @@ implementation {
         return RT_OK;
     }
 
+    static void what_to_deliver (rt_node_t Node, rt_res_t *Result,
+                                 rt_route_t **Route)
+    {
+        struct rt_find Found;
+
+        scan(Node, &Found);
+        if (Found.fresh) {
+            *Result = RT_FRESH;
+            *Route = &Found.fresh->route;
+        } else if (Found.seasoned) {
+            *Result = RT_VERIFY;
+            *Route = &Found.seasoned->route;
+        } else {
+            *Route = NULL;
+            *Result = (Node->job_running)
+                      ? RT_WORKING  /* Meaning: don't notify */
+                      : RT_NONE;
+        }
+    }
+
+
+    task void check_node ()
+    {
+        assert(call Queue.size() > 0);
+
+        do {
+            am_addr_t Target = call Queue.dequeue();
+            rt_node_t Node = call Table.get_item(&Target, TRUE);
+            struct {
+                rt_res_t result;
+                rt_route_t *route;
+            } Deliver;
+
+            assert(Node != NULL && Node->target == Target);
+
+            if (!Node->subscrs) continue;
+
+            what_to_deliver(Node, &Deliver.result, &Deliver.route);
+            if (Deliver.result != RT_WORKING) do {
+                rt_subscr_t Sub = Node->subscrs;
+
+                Node->subscrs = Sub->nxt;
+                signal RTab.deliver(Sub->id, Deliver.result, Target,
+                                    Deliver.route);
+
+                call SubscrPool.put(Sub);
+            } while (Node->subscrs);
+
+        } while (call Queue.size() > 0);
+    }
+
+    static void schedule_check (rt_node_t Node)
+    {
+        if (call Queue.enqueue(Node->target) != SUCCESS) {
+            assert(FALSE);  // Sorry, more resources needed!
+        }
+
+        if (call Queue.size() == 1) {
+            post check_node();
+        }
+    }
+
     command rt_res_t RTab.fail_promise (am_addr_t To)
     {
         rt_node_t Node;
 
-        Node = call Table.get_item(To, FALSE);
+        Node = call Table.get_item(&To, FALSE);
         if (Node == NULL) return RT_FAIL;
         if (!Node->job_running) return RT_FAIL;
         Node->job_running = 0;
+        schedule_check(Node);
 
         return RT_OK;
     }
@@ -140,84 +204,23 @@ implementation {
         }
     }
 
-    static inline void assign (rt_entry_t Entry, const rt_route_t Route)
+    static inline void assign (rt_entry_t Entry, const rt_route_t *Route)
     {
         Entry->route = *Route;
         Entry->status = FRESH;
         set_timer(Entry, HERP_RT_TIME_FRESH);
     }
 
-    static void what_to_deliver (rt_node_t Node, rt_res_t *Result,
-                                 rt_route_t *Route)
-    {
-        struct rt_find Found;
-
-        scan(Node, &Found);
-        if (Found.fresh) {
-            *Result = RT_FRESH;
-            *Route = &Found.fresh->route;
-        } else if (Found.seasoned) {
-            *Result = RT_VERIFY;
-            *Route = &Found.seasoned->route;
-        } else {
-            *Route = NULL;
-            *Result = (Node->job_running)
-                      ? RT_WORKING  /* Meaning: don't notify */
-                      : RT_NONE;
-        }
-    }
-
-    task void check_node ()
-    {
-        assert(call Queue.size() > 0);
-
-        do {
-            am_addr_t Target = call Queue.dequeue();
-            rt_node_t Node = call Table.get_item(Target, TRUE);
-            struct {
-                rt_res_t result;
-                rt_route_t route;
-            } Deliver;
-
-            assert(Node != NULL && Node->target == Target);
-
-            if (!Node->subscrs) continue;
-
-            what_to_deliver(Node, &Deliver.result, &Deliver.route);
-            if (Deliver.result != RT_WORKING) do {
-                rt_subscr_t Sub = Node->subscrs;
-
-                Node->subscrs = Sub->nxt;
-                signal RTab.deliver(Sub->id, Deliver.result, Target,
-                                    Deliver.route);
-
-                call SubscrPool.put(Sub);
-            } while (Node->subscrs);
-
-        } while (call Queue.size() > 0);
-    }
-
-    static void schedule_check (rt_node_t Node)
-    {
-        if (call Queue.enqueue(Node->target) != SUCCESS) {
-            assert(FALSE);  // Sorry, more resources needed!
-        }
-
-        if (call Queue.size() == 1) {
-            post check_node();
-        }
-    }
-
-    command rt_res_t RTab.add_route (am_addr_t To, const rt_route_t Route)
+    command rt_res_t RTab.add_route (am_addr_t To, const rt_route_t *Route)
     {
         rt_node_t Node;
         rt_entry_t Candidate;
         struct rt_find Found;
 
-        Node = call Table.get_item(To, FALSE);
+        Node = call Table.get_item(&To, FALSE);
         if (Node == NULL) return RT_FAIL;
 
-        Candidate = select_same_hop(Route->first);
+        Candidate = select_same_hop(Node, Route->first);
         if (!Candidate) {
             scan(Node, &Found);
             if (Found.dead) Candidate = Found.dead;
@@ -244,7 +247,7 @@ implementation {
         rt_node_t Node;
         int i;
 
-        Node = call Table.get_item(To, TRUE);
+        Node = call Table.get_item(&To, TRUE);
         if (Node == NULL) return RT_FAIL;
 
         for (i = 0; i < HERP_MAX_ROUTES; i ++) {
@@ -265,7 +268,7 @@ implementation {
         rt_node_t Node;
         rt_subscr_t Sub;
 
-        Node = call Table.get_item(To, TRUE);
+        Node = call Table.get_item(&To, TRUE);
         if (Node == NULL) return RT_NOT_WORKING;
         if (!Node->job_running) return RT_NOT_WORKING;
 

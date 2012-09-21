@@ -5,6 +5,7 @@
 #include <MultiTimer.h>
 
 #include <RoutingTable.h>
+#include <AM.h>
 
 typedef enum {
     DEAD = 0,
@@ -23,13 +24,13 @@ typedef struct rt_entry {
 
 typedef struct rt_subscr {
     herp_opid_t id;
-    struct subscr *nxt;
+    struct rt_subscr *nxt;
 } * rt_subscr_t;
 
 struct rt_node {
     am_addr_t target;
     struct rt_entry entries[HERP_MAX_ROUTES];
-    subscr_t subscrs;
+    rt_subscr_t subscrs;
     uint8_t job_running : 1;
     uint8_t enqueued : 1;
 };
