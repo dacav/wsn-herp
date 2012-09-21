@@ -6,41 +6,38 @@
 
 #include <RoutingTable.h>
 
-struct herp_rtroute {
-    herp_rthop_t hop;
-    herp_opid_t owner;
-    herp_rtentry_t ref;
+typedef enum {
+    DEAD = 0,
+    FRESH,
+    SEASONED,
+} rt_status_t;
+
+typedef struct rt_node * rt_node_t;
+
+typedef struct rt_entry {
+    rt_route_t route;
+    rt_status_t status;
     sched_item_t sched;
-    enum {
-        DEAD = 0,
-        BUILDING,
-        FRESH,
-        SEASONED
-    } state;
-};
+    rt_node_t ref;
+} * rt_entry_t;
 
-typedef struct subscr_item {
+typedef struct rt_subscr {
     herp_opid_t id;
-    struct subscr_item * next;
-} * subscr_item_t;
+    struct subscr *nxt;
+} * rt_subscr_t;
 
-struct herp_rtentry {
-    struct herp_rtroute routes[HERP_MAX_ROUTES];
-    uint16_t scan_start;
-
-    subscr_item_t subscr;
+struct rt_node {
     am_addr_t target;
-
-    /* Flags */
-    unsigned enqueued : 1;
-    unsigned valid : 1;
+    struct rt_entry entries[HERP_MAX_ROUTES];
+    subscr_t subscrs;
+    uint8_t job_running : 1;
+    uint8_t enqueued : 1;
 };
 
-typedef struct {
-    herp_rtroute_t dead;
-    herp_rtroute_t building;
-    herp_rtroute_t fresh;
-    herp_rtroute_t seasoned;
-} scan_t;
+typedef struct rt_find {
+    rt_entry_t dead;
+    rt_entry_t fresh;
+    rt_entry_t seasoned;
+} * rt_find_t;
 
 #endif // ROUTING_TABLE_PRIV_H

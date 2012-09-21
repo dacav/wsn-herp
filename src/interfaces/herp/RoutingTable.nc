@@ -3,102 +3,61 @@
 
 interface RoutingTable {
 
-    /** Require the next hop for a certain Node.
+    /**
      *
-     * If the Node is registered into the Routing Table this will trigger
-     * the signaling of the deliver() event and the command will return
-     * herp_rtres_t::HERP_RT_SUBSCRIBED.
-     *
-     * If an Entry for the Node is not available, the command will return
-     * herp_rtres_t::HERP_RT_REACH.
-     *
-     * If the Entry for the Node is available, but the information is
-     * seasoned, the command will return herp_rtres_t::HERP_RT_VERIFY, and
-     * the Out parameter will be assigned with the address of the entry to
-     * be verified.
-     *
-     * If there's no Entry, or the Entry is seasoned, but a process is in
-     * charge of inserting/updating it, the command will return
-     * herp_rtres_t::HERP_RT_SUBSCRIBED, and the deliver() event will be
-     * signaled as the information will be available.
-     *
-     * @param[in] Node The Node to be searched in the table;
-     * @param[out] The Fetched entry (valid only if
-     *             herp_rtres_t::HERP_RT_VERIFY is returned).
-     *
-     *
-     * @retval herp_rtres_t::HERP_RT_ERROR On failure;
-     * @retval herp_rtres_t::HERP_RT_REACH If there's no Entry;
-     * @retval herp_rtres_t::HERP_RT_VERIFY If the Entry needs to be
-     *         verified;
-     * @retval herp_rtres_t::HERP_RT_SUBSCRIBED On success (the deliver()
-     *         event will be eventually triggered).
+     * @retval RT_NONE if there's no route;
+     * @retval RT_FRESH if the yielded route is fresh;
+     * @retval RT_VERIFY if the yielded route must be verified;
+     * @retval RT_WORKING if there's no fresh route but an operation is
+     *                    already working on this job.
      */
-    command herp_rtres_t get_route (am_addr_t Node, herp_rtentry_t *Out);
-
-    /** Retrieve the job of the given Entry
-     *
-     * Each entry corresponds to multiple routes. If the get_route()
-     * command returned herp_rtres_t::HERP_RT_VERIFY, then it also yielded
-     * a Route as output parameter. This function fetches the Entry which
-     * requires the job from the route.
-     *
-     * @param[in] Entry The entry to be searched for job.
-     *
-     * @retval The pointer to the Entry's internal route.
-     * @retval NULL if there's no such job.
-     */
-    command herp_rtroute_t get_job (herp_rtentry_t Entry);
+    command rt_res_t get_route (am_addr_t To, rt_route_t *Out);
 
     /**
      *
-     * @retval herp_rtres_t::HERP_RT_SUCCESS on success.
-     * @retval herp_rtres_t::HERP_RT_ERROR if the route was not waiting
-     *         for a job;
+     * @retval RT_OK on success;
+     * @retval RT_WORKING someone is working already;
+     * @retval RT_FAIL on failure.
      */
-    command herp_rtres_t drop_job (herp_rtroute_t Route);
+    command rt_res_t promise_route (am_addr_t To);
 
     /**
      *
-     * @param[in] The Route.
-     *
-     * @retval The Hop stored inside the Route.
+     * @retval RT_OK on success;
+     * @retval RT_FAIL if nobody promised anything.
      */
-    command const herp_rthop_t * get_hop (const herp_rtroute_t Route);
+    command rt_res_t fail_promise (am_addr_t To);
 
     /**
      *
-     * In case of success the caller will be subscribed to the operation
-     * (eventually deliver() will be signaled).
-     *
-     * @retval herp_rtres_t::HERP_RT_SUBSCRIBED on success;
-     * @retval herp_rtres_t::HERP_RT_ERROR on failure.
+     * @retval RT_OK on success;
+     * @retval RT_FAIL on failure.
      */
-	command herp_rtres_t update_route (herp_rtroute_t Route, const herp_rthop_t *Hop);
+    command rt_res_t add_route (am_addr_t To, const rt_route_t Route);
 
     /**
      *
-     * @retval herp_rtres_t::SUCCESS on success;
-     * @retval herp_rtres_t::HERP_RT_ERROR on failure (the Route was
-     *         not owned as job by the caller or invalid).
+     * @retval RT_OK on success;
+     * @retval RT_FAIL on failure;
      */
-    command herp_rtres_t drop_route (herp_rtroute_t Route);
+    command rt_res_t drop_route (am_addr_t To, am_addr_t FirstHop);
 
     /**
      *
-     * In case of success the caller will be subscribed to the operation
-     * (eventually deliver() will be signaled).
-     *
-     * @retval herp_rtres_t::HERP_RT_SUBSCRIBED on success;
-     * @retval herp_rtres_t::HERP_RT_ERROR on failure.
+     * @retval RT_OK on success;
+     * @retval RT_FAIL on failure;
+     * @retval RT_NOT_WORKING if nobody is working (operation would
+     *                        stall, so not enqueued).
      */
-	command herp_rtres_t new_route (am_addr_t Node, const herp_rthop_t *Hop);
+    command rt_res_t enqueue_for (herp_opid_t OpId, am_addr_t To);
 
     /**
      *
-     * @param[in] Outcome herp_rtres_t::HERP_RT_SUCCESS or
-     *            herp_rtres_t::HERP_RT_RETRY.
+     * @param OpId The enqueued operation id;
+     * @param Res RT_NONE, RT_FRESH or RT_VERIFY, semantics as in
+     *            get_route();
      */
-    event void deliver (herp_rtres_t Outcome, am_addr_t Node, const herp_rthop_t *Hop);
+    event void deliver (herp_opid_t OpId, rt_res_t Res, am_addr_t To,
+                        const rt_route_t Route);
 
 }
