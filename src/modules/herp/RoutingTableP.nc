@@ -40,13 +40,15 @@ implementation {
                 case SEASONED:
                     if (!Find->seasoned) Find->seasoned = Entry;
                     break;
+
+                default:
+                    assert(FALSE);
             }
         }
     }
 
     command rt_res_t RTab.get_route (am_addr_t To, rt_route_t *Out)
     {
-        int i =0 ;
         rt_node_t Node;
         struct rt_find Found;
 
@@ -88,20 +90,37 @@ implementation {
     static void what_to_deliver (rt_node_t Node, rt_res_t *Result,
                                  rt_route_t **Route)
     {
-        struct rt_find Found;
+        rt_entry_t BestFresh;
+        int i;
 
-        scan(Node, &Found);
-        if (Found.fresh) {
+        BestFresh = NULL;
+        for (i = 0; i < HERP_MAX_ROUTES; i ++) {
+            rt_entry_t Entry = &Node->entries[i];
+
+            if (Entry->status == FRESH && (!BestFresh ||
+                BestFresh->route.hops > Entry->route.hops)) {
+
+                BestFresh = Entry;
+            }
+        }
+
+        if (BestFresh) {
+            *Route = &BestFresh->route;
             *Result = RT_FRESH;
-            *Route = &Found.fresh->route;
-        } else if (Found.seasoned) {
-            *Result = RT_VERIFY;
-            *Route = &Found.seasoned->route;
         } else {
-            *Route = NULL;
-            *Result = (Node->job_running)
-                      ? RT_WORKING  /* Meaning: don't notify */
-                      : RT_NONE;
+            struct rt_find Found;
+
+            scan(Node, &Found);
+
+            if (Found.seasoned) {
+                *Route = &Found.seasoned->route;
+                *Result = RT_VERIFY;
+            } else {
+                *Route = NULL;
+                *Result = (Node->job_running)
+                          ? RT_WORKING  /* Meaning: don't notify */
+                          : RT_NONE;
+            }
         }
     }
 
@@ -183,7 +202,7 @@ implementation {
         for (i = 0; i < HERP_MAX_ROUTES; i ++) {
             rt_entry_t Entry = &Node->entries[i];
 
-            if (Entry->route.first == FirstHop) {
+            if (Entry->route.first == FirstHop && Entry->status != DEAD) {
                 return Entry;
             }
         }
@@ -221,7 +240,14 @@ implementation {
         if (Node == NULL) return RT_FAIL;
 
         Candidate = select_same_hop(Node, Route->first);
-        if (!Candidate) {
+
+        if (Candidate) {
+            if (Route->hops >= Candidate->route.hops
+                    && Candidate->status == FRESH) {
+                /* Currently holding a better route! */
+                Candidate = NULL;
+            }
+        } else {
             scan(Node, &Found);
             if (Found.dead) Candidate = Found.dead;
             else if (Found.seasoned) Candidate = Found.seasoned;
