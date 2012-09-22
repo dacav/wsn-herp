@@ -27,5 +27,11 @@ static inline void opinfo_copy (herp_opinfo_t *Dst,
     memcpy(Dst, Src, sizeof(herp_opinfo_t));
 }
 
+static inline bool opinfo_equal (const herp_opinfo_t *Info1,
+                                 const herp_opinfo_t *Info2)
+{
+    return memcmp(Info1, Info2, sizeof(herp_opinfo_t)) == 0;
+}
+
 #endif // HERP_H
 

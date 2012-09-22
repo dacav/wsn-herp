@@ -10,12 +10,15 @@
 
 typedef enum {
     NEW = 0,
-    SEND
+    SEND,
+    EXPLORE
 } optype_t;
 
 typedef enum {
     START = 0,
-    WAIT_PROT
+    WAIT_BUILD,
+    WAIT_ROUTE,
+    CLOSE       // upon next prot_done close everything
 } phase_t;
 
 typedef struct {
@@ -23,6 +26,13 @@ typedef struct {
     am_addr_t to;
     uint8_t retry;
 } send_state_t;
+
+typedef struct {
+    herp_opinfo_t info;
+    rt_route_t from_src;
+    rt_route_t to_dst;
+    sched_item_t sched;
+} explore_state_t;
 
 typedef struct route_state {
     struct {
@@ -32,6 +42,7 @@ typedef struct route_state {
     } op;
     union {
         send_state_t send;
+        explore_state_t explore;
     };
 } * route_state_t;
 
