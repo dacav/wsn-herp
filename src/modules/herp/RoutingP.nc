@@ -40,6 +40,16 @@ implementation {
 
     event void OpTab.data_dispose (route_state_t State)
     {
+        switch (State->op.type) {
+            case EXPLORE:
+                assert(State->explore.sched == NULL);
+            case SEND:
+                break;
+
+            case NEW:
+            default:
+                assert(FALSE);
+        }
     }
 
     static void start_timer (route_state_t State)
@@ -220,7 +230,9 @@ implementation {
             case RT_VERIFY:
                 E = fwd_explore(State);
                 if (E == SUCCESS) {
+                    call RTab.promise_route(Target);
                     State->op.phase = WAIT_BUILD;
+                    start_timer(State);
                 }
                 break;
 
@@ -332,11 +344,11 @@ implementation {
 
         State = new_op();
         if (State == NULL) return ENOMEM;
+        State->op.type = SEND;
 
         E = call Prot.init_user_msg(Msg, opid(State), Addr);
 
         if (E == SUCCESS) {
-            State->op.type = SEND;
             State->send.msg = Msg;
             State->send.to = Addr;
             State->send.retry = HERP_MAX_RETRY;
@@ -378,6 +390,21 @@ implementation {
 
     event void Timer.fired (route_state_t State)
     {
+        am_addr_t Target, FirstHop;
+
+        assert(State->op.type == EXPLORE &&
+               State->op.phase == WAIT_BUILD &&
+               State->explore.sched != NULL);
+
+        Target = State->explore.info.to;
+        FirstHop = State->explore.to_dst.first;
+
+        if (FirstHop != AM_BROADCAST_ADDR) {
+            /* I had a route to check */
+            call RTab.drop_route(Target, FirstHop);
+        } else {
+            call RTab.fail_promise(Target);
+        }
     }
 
     static bool update_backpath (route_state_t State, am_addr_t Prev,
@@ -425,8 +452,11 @@ implementation {
 
                     case WAIT_BUILD:
                         if (update_backpath(State, Prev, HopsFromSrc)) {
-                            // re-forward explore, but ignoring failures
-                            fwd_explore(State);
+                            // re-forward explore, but failures are not
+                            // fatal.
+                            if (fwd_explore(State) == SUCCESS) {
+                                restart_timer(State);
+                            }
                         }
                         break;
 
@@ -477,12 +507,14 @@ implementation {
 
         if (State && State->op.type == EXPLORE
                   && State->op.phase == WAIT_BUILD) {
+            assert(State->explore.sched);
+            stop_timer(State);
             E = start_explore(State);
             if (E != SUCCESS) {
                 close_op(State, E);
             }
         } else {
-            assert(FALSE);  // this may happen with byzantines
+            assert(FALSE);  // TODO: remove. This may happen with byzantines
         }
     }
 
