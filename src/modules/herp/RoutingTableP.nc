@@ -47,44 +47,14 @@ implementation {
         }
     }
 
-    command rt_res_t RTab.get_route (am_addr_t To, rt_route_t *Out)
+    static bool all_dead (rt_node_t Node)
     {
-        rt_node_t Node;
-        struct rt_find Found;
+        int i;
 
-        Node = call Table.get_item(&To, TRUE);
-        if (Node == NULL) return RT_NONE;
-
-        scan(Node, &Found);
-
-        if (Found.fresh) {
-            *Out = Found.fresh->route;
-            return RT_FRESH;
+        for (i = 0; i < HERP_MAX_ROUTES; i ++) {
+            if (Node->entries[i].status != DEAD) return FALSE;
         }
-
-        if (Node->job_running) {
-            return RT_WORKING;
-        }
-
-        if (Found.seasoned) {
-            *Out = Found.seasoned->route;
-            return RT_VERIFY;
-        }
-
-        assert(Found.dead && Node->enqueued);
-        return RT_NONE;
-    }
-
-    command rt_res_t RTab.promise_route (am_addr_t To)
-    {
-        rt_node_t Node;
-
-        Node = call Table.get_item(&To, FALSE);
-        if (Node == NULL) return RT_FAIL;
-        if (Node->job_running) return RT_WORKING;
-        Node->job_running = 1;
-
-        return RT_OK;
+        return TRUE;
     }
 
     static void what_to_deliver (rt_node_t Node, rt_res_t *Result,
@@ -116,6 +86,7 @@ implementation {
                 *Route = &Found.seasoned->route;
                 *Result = RT_VERIFY;
             } else {
+                assert(Found.dead);
                 *Route = NULL;
                 *Result = (Node->job_running)
                           ? RT_WORKING  /* Meaning: don't notify */
@@ -124,33 +95,40 @@ implementation {
         }
     }
 
-
     task void check_node ()
     {
         assert(call Queue.size() > 0);
 
         do {
             am_addr_t Target = call Queue.dequeue();
-            rt_node_t Node = call Table.get_item(&Target, TRUE);
-            struct {
-                rt_res_t result;
-                rt_route_t *route;
-            } Deliver;
+            hash_slot_t Slot = call Table.get(&Target, TRUE);
+            rt_node_t Node = call Table.item(Slot);
 
-            assert(Node != NULL && Node->target == Target);
+            assert(Node != NULL);
+            assert(Node->target == Target && Node->enqueued);
+            Node->enqueued = 0;
 
-            if (!Node->subscrs) continue;
+            if (Node->subscrs) {
+                struct {
+                    rt_res_t result;
+                    rt_route_t *route;
+                } Deliver;
 
-            what_to_deliver(Node, &Deliver.result, &Deliver.route);
-            if (Deliver.result != RT_WORKING) do {
-                rt_subscr_t Sub = Node->subscrs;
+                what_to_deliver(Node, &Deliver.result, &Deliver.route);
+                if (Deliver.result != RT_WORKING) do {
+                    rt_subscr_t Sub = Node->subscrs;
 
-                Node->subscrs = Sub->nxt;
-                signal RTab.deliver(Sub->id, Deliver.result, Target,
-                                    Deliver.route);
+                    Node->subscrs = Sub->nxt;
+                    signal RTab.deliver(Sub->id, Deliver.result, Target,
+                                        Deliver.route);
 
-                call SubscrPool.put(Sub);
-            } while (Node->subscrs);
+                    call SubscrPool.put(Sub);
+                } while (Node->subscrs);
+            }
+
+            if (all_dead(Node)) {
+                call Table.del(Slot);
+            }
 
         } while (call Queue.size() > 0);
     }
@@ -160,10 +138,56 @@ implementation {
         if (call Queue.enqueue(Node->target) != SUCCESS) {
             assert(FALSE);  // Sorry, more resources needed!
         }
+        Node->enqueued = 1;
 
         if (call Queue.size() == 1) {
             post check_node();
         }
+    }
+
+    command rt_res_t RTab.get_route (am_addr_t To, rt_route_t *Out)
+    {
+        rt_node_t Node;
+        struct rt_find Found;
+
+        Node = call Table.get_item(&To, TRUE);
+        if (Node == NULL) return RT_NONE;
+
+        scan(Node, &Found);
+
+        if (Found.fresh) {
+            *Out = Found.fresh->route;
+            return RT_FRESH;
+        }
+
+        if (Node->job_running) {
+            return RT_WORKING;
+        }
+
+        if (Found.seasoned) {
+            *Out = Found.seasoned->route;
+            return RT_VERIFY;
+        }
+
+        assert(Found.dead);
+
+        if (!Node->enqueued) {
+            schedule_check(Node);
+        }
+
+        return RT_NONE;
+    }
+
+    command rt_res_t RTab.promise_route (am_addr_t To)
+    {
+        rt_node_t Node;
+
+        Node = call Table.get_item(&To, FALSE);
+        if (Node == NULL) return RT_FAIL;
+        if (Node->job_running) return RT_WORKING;
+        Node->job_running = 1;
+
+        return RT_OK;
     }
 
     command rt_res_t RTab.fail_promise (am_addr_t To)
