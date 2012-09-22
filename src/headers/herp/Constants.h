@@ -16,7 +16,6 @@
 #define HERP_DEFAULT_RTT    500 /* TODO: set reasonable value */
 
 /* TODO: set also reasonable values */
-#define HERP_RT_TIME_BUILDING   (5 * 1024) /* BUILDING to DEAD */
 #define HERP_RT_TIME_FRESH      (3 * 1024) /* FRESH to SEASONED */
 #define HERP_RT_TIME_SEASONED   (5 * 1024) /* SEASONED to DEAD */
 

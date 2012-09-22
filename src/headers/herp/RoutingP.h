@@ -9,67 +9,30 @@
 #include <OperationTable.h>
 
 typedef enum {
-    NEW     = 0,
-    SEND    = 1,
-    EXPLORE = 2,
-    BUILD   = 3,
-    PAYLOAD = 4,
-    COLLECT = 5
-} op_type_t;
+    NEW = 0,
+    SEND
+} optype_t;
 
 typedef enum {
-    START           = 0,
-    WAIT_PROT       = 1,
-    WAIT_BUILD      = 2,
-    WAIT_ROUTE      = 3,
-    WAIT_JOB        = 4
-} op_phase_t;
+    START = 0,
+    WAIT_PROT
+} phase_t;
 
 typedef struct {
     message_t *msg;
-    am_addr_t target;
+    am_addr_t to;
     uint8_t retry;
 } send_state_t;
 
-typedef struct {
-    herp_rtroute_t job;         /**< NULL unless we've a running job wrt
-                                     Routing Table */
-
-    sched_item_t sched;         /**< NULL unless we've a running timer */
-
-    am_addr_t prev;             /**< Node for Build forwarding (set to
-                                     TOS_NODE_ID if the communication is
-                                     local */
-
-    uint16_t hops_from_src;     /**< Useful for choice of best prev; */
-
-    am_addr_t propagate;        /**< Explore propagation address (may be
-                                     AM_BROADCAST_ADDR. */
-
-    herp_opinfo_t info;         /**< Context for information propagation. */
-
-} explore_state_t;
-
-typedef struct {
-    message_t *msg;
-    uint8_t len;
-    herp_opinfo_t info;
-} payload_state_t;
-
 typedef struct route_state {
     struct {
-        uint8_t type    : 4;    // op_type_t
-        uint8_t phase   : 4;    // op_phase_t
+        herp_oprec_t rec;
+        uint8_t type : 4;
+        uint8_t phase : 4;
     } op;
-
-    herp_oprec_t op_rec;
-
     union {
         send_state_t send;
-        explore_state_t explore;
-        payload_state_t payload;
     };
-
 } * route_state_t;
 
 #endif // ROUTING_PRIV_H
