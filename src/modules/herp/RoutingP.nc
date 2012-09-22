@@ -40,6 +40,7 @@ implementation {
 
     event void OpTab.data_dispose (route_state_t State)
     {
+#ifndef NDEBUG
         switch (State->op.type) {
             case EXPLORE:
                 assert(State->explore.sched == NULL);
@@ -50,6 +51,7 @@ implementation {
             default:
                 assert(FALSE);
         }
+#endif
     }
 
     static void start_timer (route_state_t State)
@@ -104,6 +106,10 @@ implementation {
 
             case EXPLORE:
                 stop_timer(State);
+                break;
+
+            case PAYLOAD:
+                call PayloadPool.put(State->payload.msg);
                 break;
 
             case NEW:
@@ -195,6 +201,17 @@ implementation {
                     State->op.phase = CLOSE;
                 }
                 break;
+
+            case PAYLOAD:
+                E = call Prot.fwd_payload(&State->payload.info,
+                                          Route->first,
+                                          State->payload.msg,
+                                          State->payload.len);
+                if (E == SUCCESS) {
+                    State->op.phase = CLOSE;
+                }
+                break;
+
             case NEW:
             default:
                 assert(FALSE);
@@ -557,6 +574,13 @@ implementation {
                 }
                 break;
 
+            case PAYLOAD:
+                assert(State->op.phase == WAIT_ROUTE);
+                E = commit(State, Route);
+                if (E != SUCCESS) {
+                    close_op(State, E);
+                }
+
             case NEW:
             default:
                 assert(FALSE);
@@ -581,6 +605,70 @@ implementation {
     event message_t * Prot.got_payload (const herp_opinfo_t *Info,
                                         message_t *Msg, uint8_t Len)
     {
+        am_addr_t Addr = Info->to;
+
+        if (Addr == TOS_NODE_ID) {
+            void *Payload = call Packet.getPayload(Msg, Len);
+
+            call AMPacket.setDestination(Msg, TOS_NODE_ID);
+            call AMPacket.setSource(Msg, Info->from);
+            signal Receive.receive(Msg, Payload, Len);
+
+        } else {
+            rt_route_t Route;
+            rt_res_t RoutRes;
+            route_state_t State;
+            error_t E;
+
+            if (call PayloadPool.empty()) return Msg;
+            State = ext_op(Info, FALSE);
+            if (State == NULL || State->op.type != NEW) return Msg;
+
+            State->op.type = PAYLOAD;
+
+            RoutRes = call RTab.get_route(Addr, &Route);
+            if (RoutRes == RT_NONE) {
+                E = FAIL;
+            } else {
+                State->payload.info = *Info;
+                State->payload.msg = Msg;
+                State->payload.len = Len;
+
+                Msg = call PayloadPool.get();
+
+                switch (RoutRes) {
+                    case RT_FRESH:
+                        E = commit(State, &Route);
+                        if (E == SUCCESS) {
+                            State->op.phase = CLOSE;
+                        }
+                        break;
+
+                    case RT_VERIFY:
+                        E = new_explore(Addr);
+                        if (E == SUCCESS) {
+                    case RT_WORKING:
+                            if (call RTab.enqueue_for(Addr, opid(State))
+                                    == RT_OK) {
+                                E = SUCCESS;
+                                State->op.phase = WAIT_ROUTE;
+                            } else {
+                                E = FAIL;
+                            }
+                        }
+                        break;
+
+                    default:
+                        assert(FALSE);
+                }
+            }
+
+            if (E != SUCCESS) {
+                close_op(State, E);
+            }
+
+        }
+
         return Msg;
     }
 

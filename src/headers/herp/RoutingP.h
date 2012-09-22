@@ -11,7 +11,8 @@
 typedef enum {
     NEW = 0,
     SEND,
-    EXPLORE
+    EXPLORE,
+    PAYLOAD
 } optype_t;
 
 typedef enum {
@@ -34,6 +35,12 @@ typedef struct {
     sched_item_t sched;
 } explore_state_t;
 
+typedef struct {
+    herp_opinfo_t info;
+    message_t *msg;
+    uint8_t len;
+} payload_state_t;
+
 typedef struct route_state {
     struct {
         herp_oprec_t rec;
@@ -43,6 +50,7 @@ typedef struct route_state {
     union {
         send_state_t send;
         explore_state_t explore;
+        payload_state_t payload;
     };
 } * route_state_t;
 
