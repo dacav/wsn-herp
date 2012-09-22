@@ -40,7 +40,7 @@ implementation {
         V->store = (void *)UserData;
         V->owner = TOS_NODE_ID;
 
-        if (signal OpTab.data_init(UserData) != SUCCESS) {
+        if (signal OpTab.data_init(V, UserData) != SUCCESS) {
             call UserDataPool.put(UserData);
             return FAIL;
         }
