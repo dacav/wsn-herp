@@ -593,14 +593,19 @@ implementation {
                 assert(State->op.phase == WAIT_ROUTE);
                 assert(To == State->explore.info.to);
                 switch (Res) {
+
                     case RT_NONE:
                         E = FAIL;
+                        break;
+
                     case RT_FRESH:
                         E = commit(State, Route);
                         break;
+
                     case RT_VERIFY:
                         E = start_explore(State);
                         break;
+
                     default:
                         assert(FALSE);
                 }
@@ -615,6 +620,7 @@ implementation {
                 if (E != SUCCESS) {
                     close_op(State, E);
                 }
+                break;
 
             case NEW:
             default:
