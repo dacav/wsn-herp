@@ -45,6 +45,7 @@ implementation {
             case EXPLORE:
                 assert(State->explore.sched == NULL);
             case SEND:
+            case PAYLOAD:
                 break;
 
             case NEW:
@@ -194,11 +195,16 @@ implementation {
                 break;
 
             case EXPLORE:
-                E = call Prot.fwd_build(&State->explore.info,
-                                        State->explore.from_src.first,
-                                        Route->hops);
-                if (E == SUCCESS) {
-                    State->op.phase = CLOSE;
+                if (State->explore.info.from == TOS_NODE_ID) {
+                    close_op(State, SUCCESS);
+                    E = SUCCESS;
+                } else {
+                    E = call Prot.fwd_build(&State->explore.info,
+                                            State->explore.from_src.first,
+                                            Route->hops);
+                    if (E == SUCCESS) {
+                        State->op.phase = CLOSE;
+                    }
                 }
                 break;
 
@@ -248,8 +254,7 @@ implementation {
                 E = fwd_explore(State);
                 if (E == SUCCESS) {
                     call RTab.promise_route(Target);
-                    State->op.phase = WAIT_BUILD;
-                    start_timer(State);
+                    State->op.phase = WAIT_PROT;
                 }
                 break;
 
@@ -382,6 +387,16 @@ implementation {
 
     static void prot_done (route_state_t State, error_t E)
     {
+        if (State->op.type == EXPLORE && State->op.phase == WAIT_PROT) {
+            if (E == SUCCESS) {
+                State->op.phase = WAIT_BUILD;
+                start_timer(State);
+            } else {
+                call RTab.fail_promise(State->explore.info.to);
+            }
+            return;
+        }
+
         if (State->op.phase == CLOSE || E != SUCCESS) {
 
             // "phase!=CLOSE implies (type==EXPLORE and E!=SUCCESS)"
@@ -390,6 +405,7 @@ implementation {
 
             close_op(State, E);
         }
+
     }
 
     event void Prot.done_local (herp_opid_t OpId, error_t E)
@@ -413,6 +429,8 @@ implementation {
                State->op.phase == WAIT_BUILD &&
                State->explore.sched != NULL);
 
+        State->explore.sched = NULL;
+
         Target = State->explore.info.to;
         FirstHop = State->explore.to_dst.first;
 
@@ -422,6 +440,8 @@ implementation {
         } else {
             call RTab.fail_promise(Target);
         }
+
+        close_op(State, FAIL);
     }
 
     static bool update_backpath (route_state_t State, am_addr_t Prev,
@@ -435,6 +455,14 @@ implementation {
         return TRUE;
     }
 
+    static inline error_t start_build (route_state_t State,
+                                       const herp_opinfo_t *Info,
+                                       am_addr_t BackHop)
+    {
+        State->op.phase = CLOSE;
+        return call Prot.send_build(opid(State), Info, BackHop);
+    }
+
     event void Prot.got_explore (const herp_opinfo_t *Info, am_addr_t Prev,
                                  uint16_t HopsFromSrc)
     {
@@ -442,7 +470,18 @@ implementation {
         error_t E;
         if (State == NULL) return;
 
-        switch (State->op.type) {
+        if (Info->to == TOS_NODE_ID) {
+
+            /* avoid messing with running operation */
+            if (State->op.type != NEW) return;
+
+            State->op.type = EXPLORE;
+            E = start_build(State, Info, Prev);
+            if (E != SUCCESS) {
+                close_op(State, E);
+            }
+
+        } else switch (State->op.type) {
 
             case NEW:
                 State->op.type = EXPLORE;
@@ -450,8 +489,8 @@ implementation {
                 State->explore.from_src.first = Prev;
                 State->explore.from_src.hops = HopsFromSrc;
 
-
                 E = start_explore(State);
+
                 if (E != SUCCESS) {
                     close_op(State, E);
                 }
@@ -530,8 +569,6 @@ implementation {
             if (E != SUCCESS) {
                 close_op(State, E);
             }
-        } else {
-            assert(FALSE);  // TODO: remove. This may happen with byzantines
         }
     }
 

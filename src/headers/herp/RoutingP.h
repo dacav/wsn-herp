@@ -17,6 +17,7 @@ typedef enum {
 
 typedef enum {
     START = 0,
+    WAIT_PROT,
     WAIT_BUILD,
     WAIT_ROUTE,
     CLOSE       // upon next prot_done close everything
