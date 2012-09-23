@@ -49,7 +49,7 @@ interface RoutingTable {
      * @retval RT_NOT_WORKING if nobody is working (operation would
      *                        stall, so not enqueued).
      */
-    command rt_res_t enqueue_for (herp_opid_t OpId, am_addr_t To);
+    command rt_res_t enqueue_for (am_addr_t To, herp_opid_t OpId);
 
     /**
      *

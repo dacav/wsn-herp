@@ -126,7 +126,7 @@ implementation {
                 } while (Node->subscrs);
             }
 
-            if (all_dead(Node)) {
+            if (all_dead(Node) && !Node->job_running) {
                 call Table.del(Slot);
             }
 
@@ -249,6 +249,16 @@ implementation {
 
     static inline void assign (rt_entry_t Entry, const rt_route_t *Route)
     {
+#ifdef DUMP
+        am_addr_t Target = Entry->ref->target;
+
+        if (Entry->status != DEAD) {
+            dbg("RTab", "Route for %d, deleted <%d, %d>\n", Target,
+                Entry->route.first, Entry->route.hops);
+        }
+        dbg("RTab", "Route for %d, added <%d, %d>\n", Target,
+            Route->first, Route->hops);
+#endif
         Entry->route = *Route;
         Entry->status = FRESH;
         set_timer(Entry, HERP_RT_TIME_FRESH);
@@ -313,7 +323,7 @@ implementation {
         return RT_OK;
     }
 
-    command rt_res_t RTab.enqueue_for (herp_opid_t OpId, am_addr_t To)
+    command rt_res_t RTab.enqueue_for (am_addr_t To, herp_opid_t OpId)
     {
         rt_node_t Node;
         rt_subscr_t Sub;
@@ -353,6 +363,9 @@ implementation {
             Node->entries[i].ref = Node;
         }
 
+#ifdef DUMP
+        dbg("RTab", "Entry for %d, created.\n", *Target);
+#endif
         return SUCCESS;
     }
 
@@ -368,6 +381,10 @@ implementation {
             assert(Entry->sched == NULL);
             assert(Entry->status == DEAD);
         }
+
+#ifdef DUMP
+        dbg("RTab", "Entry for %d, destroyed.\n", *Target);
+#endif
     }
 
     event void MultiTimer.fired (rt_entry_t Entry)
@@ -379,11 +396,23 @@ implementation {
 
             case FRESH:
                 Entry->status = SEASONED;
+#ifdef DUMP
+                dbg("RTab", "Route for %d, seasoned <%d, %d>\n",
+                    Entry->ref->target,
+                    Entry->route.first,
+                    Entry->route.hops);
+#endif
                 set_timer(Entry, HERP_RT_TIME_SEASONED);
                 break;
 
             case SEASONED:
                 Entry->status = DEAD;
+#ifdef DUMP
+                dbg("RTab", "Route for %d, deleted <%d, %d>\n",
+                    Entry->ref->target,
+                    Entry->route.first,
+                    Entry->route.hops);
+#endif
                 break;
 
             case DEAD:
