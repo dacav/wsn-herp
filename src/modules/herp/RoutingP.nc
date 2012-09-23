@@ -516,6 +516,7 @@ implementation {
                         }
                         break;
 
+                    case WAIT_PROT:
                     case WAIT_ROUTE:
                         update_backpath(State, Prev, HopsFromSrc);
                         break;
