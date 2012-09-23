@@ -196,26 +196,23 @@ implementation {
 
             case EXPLORE:
                 if (State->explore.info.from == TOS_NODE_ID) {
+                    /* Local send here. Nothing to be done. */
                     close_op(State, SUCCESS);
                     E = SUCCESS;
                 } else {
+                    State->op.phase = CLOSE;
                     E = call Prot.fwd_build(&State->explore.info,
                                             State->explore.from_src.first,
                                             Route->hops);
-                    if (E == SUCCESS) {
-                        State->op.phase = CLOSE;
-                    }
                 }
                 break;
 
             case PAYLOAD:
+                State->op.phase = CLOSE;
                 E = call Prot.fwd_payload(&State->payload.info,
                                           Route->first,
                                           State->payload.msg,
                                           State->payload.len);
-                if (E == SUCCESS) {
-                    State->op.phase = CLOSE;
-                }
                 break;
 
             case NEW:
