@@ -495,7 +495,7 @@ implementation {
                 break;
 
             case EXPLORE:
-                assert(opinfo_equal(Info, &State->explore.info));
+                if (!opinfo_equal(Info, &State->explore.info)) return;
                 if (Info->from == TOS_NODE_ID) {
                     assert(State->explore.from_src.first == TOS_NODE_ID);
                     return; // ignore our own explores
