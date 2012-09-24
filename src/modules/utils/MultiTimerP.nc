@@ -19,6 +19,11 @@ implementation {
 
     sched_item_t sched;
 
+    static inline uint32_t get_now ()
+    {
+        return call BaseTimer.getNow();
+    }
+
     command error_t Init.init ()
     {
         sched_item_t Item;
@@ -27,7 +32,6 @@ implementation {
 
         while (!call Pool.empty()) {
             Item = call Pool.get();
-            Item->valid = 0;
             Item->next = sched;
             sched = Item;
         }
@@ -35,6 +39,7 @@ implementation {
         while (sched != NULL) {
             Item = sched;
             sched = Item->next;
+            Item->valid = 0;
             call Pool.put(Item);
         }
 
@@ -50,10 +55,14 @@ implementation {
         uint32_t now;
 
         fresh = call Pool.get();
-        if (fresh == NULL) return NULL;
+        assert(fresh != NULL);      // TODO: remove
+        if (fresh == NULL) {
+            return NULL;
+        }
+        assert(fresh->valid == 0);
         fresh->valid = 1;
 
-        now = call BaseTimer.getNow();
+        now = get_now();
 
         cursor = sched;
         pr = NULL;
@@ -102,9 +111,7 @@ implementation {
         if (E == sched) {
             if (nx) {
                 nx->prev = NULL;
-                call BaseTimer.startOneShot(
-                    nx->time - call BaseTimer.getNow()
-                );
+                call BaseTimer.startOneShot(nx->time - get_now());
             } else if (call BaseTimer.isRunning()) {
                 call BaseTimer.stop();
             }
@@ -146,8 +153,7 @@ implementation {
 
         if (sched) {
             sched->prev = NULL;
-            now = call BaseTimer.getNow();
-            call BaseTimer.startOneShot(sched->time - now);
+            call BaseTimer.startOneShot(sched->time - get_now());
         }
     }
 
