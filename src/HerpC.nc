@@ -56,8 +56,8 @@ implementation {
 
     static inline void print_stats ()
     {
-        dbg("Stats", "Sent=%d, Received=%d, Returned=%d\n",
-            Sent, Received, Returned);
+        dbg("Stats", "Budget=%d, Sent=%d, Received=%d, Returned=%d\n",
+            Budget, Sent, Received, Returned);
     }
 
     static inline void wake_up_random ()
