@@ -77,9 +77,10 @@ implementation {
     {
         assert(State->op.type == EXPLORE);
 
-        if (State->explore.sched == NULL) return;
-        call Timer.nullify(State->explore.sched);
-        State->explore.sched = NULL;
+        if (State->explore.sched != NULL) {
+            call Timer.nullify(State->explore.sched);
+            State->explore.sched = NULL;
+        }
     }
 
     static void restart_timer (route_state_t State)
@@ -88,7 +89,7 @@ implementation {
         start_timer(State);
     }
 
-    static inline herp_opid_t opid (route_state_t State)
+    static inline herp_opid_t opid (const route_state_t State)
     {
         return call OpTab.fetch_internal_id(State->op.rec);
     }
@@ -557,10 +558,11 @@ implementation {
             opportunistic(Prev);
         }
 
-        State = ext_op(Info, FALSE);
+        State = ext_op(Info, TRUE);
+        if (State == NULL) return;
 
-        if (State && State->op.type == EXPLORE
-                  && State->op.phase == WAIT_BUILD) {
+
+        if (State->op.type == EXPLORE && State->op.phase == WAIT_BUILD) {
             assert(State->explore.sched);
             stop_timer(State);
             E = start_explore(State);
