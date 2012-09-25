@@ -584,11 +584,11 @@ implementation {
                 assert(To == State->send.to);
                 if (Res == RT_FRESH) {
                     E = commit(State, Route);
-                    if (E != SUCCESS) {
-                        close_op(State, E);
-                    }
                 } else {
-                    retry(State);
+                    E = retry(State);
+                }
+                if (E != SUCCESS) {
+                    close_op(State, E);
                 }
                 break;
 
