@@ -139,7 +139,7 @@ implementation {
         if (Type == USER_DATA) {
 
             Len -= sizeof(header_t);
-            return signal Protocol.got_payload(&Info, Msg, Len);
+            Msg = signal Protocol.got_payload(&Info, Msg, Len);
 
         } else {
             am_addr_t Prev = HerpMsg->data.path.prev;
@@ -150,9 +150,9 @@ implementation {
             } else {
                 signal Protocol.got_build(&Info, Prev, HopCount);
             }
-
-            return Msg;
         }
+
+        return Msg;
     }
 
     static error_t path_forward (const herp_opinfo_t *Info, op_t OpType, am_addr_t Next, uint16_t HopCount) {
@@ -209,7 +209,6 @@ implementation {
         HerpMsg = msg_unwrap(Msg, call SubPacket.payloadLength(Msg));
         OpId = HerpMsg->header.op.id;
         From = HerpMsg->header.from;
-        call MsgPool.put(Msg);
 
         if (From == TOS_NODE_ID) {
             /* This was an operation asked by the upper layer */
@@ -217,6 +216,8 @@ implementation {
         } else {
             signal Protocol.done_remote(From, OpId, E);
         }
+
+        call MsgPool.put(Msg);
     }
 
     command void Packet.clear(message_t *Msg) {

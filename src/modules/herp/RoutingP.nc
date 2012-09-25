@@ -578,6 +578,7 @@ implementation {
         route_state_t State = int_op(OpId);
         error_t E;
 
+        assert(State != NULL);
         switch (State->op.type) {
             case SEND:
                 assert(To == State->send.to);
@@ -605,7 +606,11 @@ implementation {
                         break;
 
                     case RT_VERIFY:
-                        E = start_explore(State);
+                        E = fwd_explore(State);
+                        if (E == SUCCESS) {
+                            call RTab.promise_route(To);
+                            State->op.phase = WAIT_PROT;
+                        }
                         break;
 
                     default:
@@ -655,7 +660,7 @@ implementation {
 
             call AMPacket.setDestination(Msg, TOS_NODE_ID);
             call AMPacket.setSource(Msg, Info->from);
-            signal Receive.receive(Msg, Payload, Len);
+            Msg = signal Receive.receive(Msg, Payload, Len);
 
         } else {
             rt_route_t Route;
