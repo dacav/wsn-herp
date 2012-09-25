@@ -104,8 +104,9 @@ implementation {
             hash_slot_t Slot = call Table.get(&Target, TRUE);
             rt_node_t Node = call Table.item(Slot);
 
-            assert(Node != NULL);
-            assert(Node->target == Target && Node->enqueued);
+            if (Node == NULL) continue;
+            assert(Node->target == Target);
+            assert(Node->enqueued);
             Node->enqueued = 0;
 
             if (Node->subscrs) {
@@ -135,13 +136,15 @@ implementation {
 
     static void schedule_check (rt_node_t Node)
     {
-        if (call Queue.enqueue(Node->target) != SUCCESS) {
-            assert(FALSE);  // Sorry, more resources needed!
-        }
-        Node->enqueued = 1;
+        if (!Node->enqueued) {
+            if (call Queue.enqueue(Node->target) != SUCCESS) {
+                assert(FALSE);  // Sorry, more resources needed!
+            }
+            Node->enqueued = 1;
 
-        if (call Queue.size() == 1) {
-            post check_node();
+            if (call Queue.size() == 1) {
+                post check_node();
+            }
         }
     }
 

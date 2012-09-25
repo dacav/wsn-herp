@@ -435,9 +435,8 @@ implementation {
         if (FirstHop != AM_BROADCAST_ADDR) {
             /* I had a route to check */
             call RTab.drop_route(Target, FirstHop);
-        } else {
-            call RTab.fail_promise(Target);
         }
+        call RTab.fail_promise(Target);
 
         close_op(State, FAIL);
     }
@@ -623,7 +622,10 @@ implementation {
 
             case PAYLOAD:
                 assert(State->op.phase == WAIT_ROUTE);
-                E = commit(State, Route);
+                E = FAIL;
+                if (Res == RT_FRESH) {
+                    E = commit(State, Route);
+                }
                 if (E != SUCCESS) {
                     close_op(State, E);
                 }
