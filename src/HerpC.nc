@@ -60,13 +60,15 @@ implementation {
             Budget, Sent, Received, Returned);
     }
 
-    static inline void wake_up_random ()
+    static void wake_up_random ()
     {
         if (Budget) {
             uint16_t T;
 
             Budget --;
+            dbg("Out", "Waking up after random time...\n");
             T = rand_int(MIN_TIME, MAX_TIME);
+            dbg("Out", "Time is %d\n", T);
             call Timer.startOneShot(T);
         } else {
             dbg("Stats", "Out of budget. I quit\n");
@@ -151,6 +153,7 @@ implementation {
             print_stats();
         }
         wake_up_random();
+        dbg("Out", "Goodbye!\n");
     }
 
     event void Radio.startDone (error_t Err)
@@ -172,8 +175,10 @@ implementation {
             Target %= N_NODES;
         }
 
-        dbg("Out", "Sending to %d\n", Target);
-        if (send(HELLO_PING, Target) != SUCCESS) {
+        if (send(HELLO_PING, Target) == SUCCESS) {
+            dbg("Out", "Sending to %d: SUCCESS\n", Target);
+        } else {
+            dbg("Out", "Sending to %d: FAIL\n", Target);
             wake_up_random();
         }
     }
