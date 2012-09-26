@@ -132,10 +132,12 @@ static void set_terminated (int)
 static void add_channels (Tossim &tossim, LogFiles &log)
 {
     tossim.addChannel("Stats", log.open("stats.log"));
+    tossim.addChannel("Out", stdout);
+#ifdef DUMP
     tossim.addChannel("Prot", log.open("prot.log"));
     tossim.addChannel("RTab", log.open("rtab.log"));
     tossim.addChannel("OpId", log.open("opid.log"));
-    tossim.addChannel("Out", stdout);
+#endif
 }
 
 int main (int argc, char **argv)
@@ -156,9 +158,9 @@ int main (int argc, char **argv)
 
     long step = 0;
     while (!terminated) {
-        std::cout << (step ++) << std::endl;
+        //std::cout << (step ++) << std::endl;
         tossim.runNextEvent();
-        usleep(100 * /* ms */ 1000);
+        usleep(50 * /* ms */ 1000);
     }
 
     return 0;
