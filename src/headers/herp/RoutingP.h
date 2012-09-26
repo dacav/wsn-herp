@@ -34,6 +34,9 @@ typedef struct {
     rt_route_t from_src;
     rt_route_t to_dst;
     sched_item_t sched;
+#ifndef NDEBUG
+    uint8_t promised : 1;
+#endif
 } explore_state_t;
 
 typedef struct {

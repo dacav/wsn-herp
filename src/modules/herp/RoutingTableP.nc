@@ -374,6 +374,7 @@ implementation {
 
     event void Table.value_dispose (const am_addr_t *Target, rt_node_t Node)
     {
+#ifndef NDEBUG
         int i;
 
         assert(Node->subscrs == NULL);
@@ -384,7 +385,7 @@ implementation {
             assert(Entry->sched == NULL);
             assert(Entry->status == DEAD);
         }
-
+#endif
 #ifdef DUMP
         dbg("RTab", "Entry for %d, destroyed.\n", *Target);
 #endif

@@ -44,6 +44,7 @@ implementation {
         switch (State->op.type) {
             case EXPLORE:
                 assert(State->explore.sched == NULL);
+                assert(!State->explore.promised);
             case SEND:
             case PAYLOAD:
                 break;
@@ -252,6 +253,10 @@ implementation {
                 E = fwd_explore(State);
                 if (E == SUCCESS) {
                     call RTab.promise_route(Target);
+                    assert(!State->explore.promised);
+#ifndef NDEBUG
+                    State->explore.promised = 1;
+#endif
                     State->op.phase = WAIT_PROT;
                 }
                 break;
@@ -391,6 +396,10 @@ implementation {
                 start_timer(State);
             } else {
                 call RTab.fail_promise(State->explore.info.to);
+#ifndef NDEBUG
+                assert(State->explore.promised);
+                State->explore.promised = 0;
+#endif
             }
             return;
         }
@@ -437,6 +446,10 @@ implementation {
             call RTab.drop_route(Target, FirstHop);
         }
         call RTab.fail_promise(Target);
+#ifndef NDEBUG
+        assert(State->explore.promised);
+        State->explore.promised = 0;
+#endif
 
         close_op(State, FAIL);
     }
@@ -560,10 +573,16 @@ implementation {
         State = ext_op(Info, TRUE);
         if (State == NULL) return;
 
-
         if (State->op.type == EXPLORE && State->op.phase == WAIT_BUILD) {
             assert(State->explore.sched);
             stop_timer(State);
+
+#ifndef NDEBUG
+            if (Info->to == State->explore.info.to) {
+                State->explore.promised = 0;
+            }
+#endif
+
             E = start_explore(State);
             if (E != SUCCESS) {
                 close_op(State, E);
@@ -608,6 +627,10 @@ implementation {
                         E = fwd_explore(State);
                         if (E == SUCCESS) {
                             call RTab.promise_route(To);
+                            assert(!State->explore.promised);
+#ifndef NDEBUG
+                            State->explore.promised = 1;
+#endif
                             State->op.phase = WAIT_PROT;
                         }
                         break;
