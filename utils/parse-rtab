@@ -1,0 +1,130 @@
+#!/usr/bin/env python
+
+'''{prog} - Parse routing tables dump
+
+Synopsis:
+    {prog} <rtab-file> id1 [id2 ... idN]
+
+    Where <rtab-file> is usually `rtab.log` (produced by the tinyos
+    program).
+
+This program show the routing tables of the selected nodes. Each row of
+the rtab file corresponds to a change in the routing table of a node. This
+program traces the history of the routing tables of the system.
+
+'''
+
+from __future__ import print_function, division
+import sys
+import itertools as it
+import re
+from collections import defaultdict as ddict
+
+try: range = xrange
+except: pass
+
+def parse (f):
+    pat1 = re.compile(r'^DEBUG \((\d+)\): (\w+) for (\d+), (.*)$')
+    pat2 = re.compile(r'^(\w+) <(\d+), (\d+)>$')
+    def mkev (row):
+        try:
+            who, entity, target, what = re.match(pat1, row).groups()
+            if entity == 'Route':
+                act, first, hops = re.match(pat2, what).groups()
+                act = ('+' if act == 'added' else
+                       's' if act == 'seasoned' else
+                       '-' if act == 'deleted' else None)
+                assert(act)
+                event = (act, first, hops)
+            else:
+                assert(entity == 'Entry')
+                if what == 'created.':
+                    event = ('+', None, None)
+                else:
+                    assert(what == 'destroyed.')
+                    event = ('-', None, None)
+
+            return int(who), int(target), event
+        except Exception as E:
+            raise Exception("{0} for {1}".format(E, row))
+    return (mkev(row) for row in f)
+
+def route_history (events, *nodes, **opts):
+    # node -> routes -> first_hop -> status
+    trace = opts.get('trace', False)
+    rtabs = ddict(dict)
+
+    def change_entry (who, target, act):
+        if act == '+':
+            assert rtabs[who].get(target, None) == None, \
+                   '{0} adds entry for {1} twice'.format(who, target)
+            rtabs[who][target] = dict()
+        elif act == '-':
+            rt = rtabs[who].get(target, None)
+            assert rt != None, \
+                   '{0} dels non-existent entry for {1}'.format(who, target)
+            assert all(s == 'd' for s in rt.itervalues()), \
+                   '{0} dels non-empty entry for {1}'.format(who, target)
+            del rtabs[who][target]
+
+    def change_route (who, target, event):
+        act, first, hops = event
+        if act == '+':
+            rtabs[who][target][first, hops] = 'f'
+        elif act == 's':
+            routes = rtabs[who][target]
+            assert(routes[first, hops] == 'f')
+            routes[first, hops] = 's'
+        else:
+            assert(act == '-')
+            routes = rtabs[who][target]
+            assert(routes[first, hops] in 'fs')
+            routes[first, hops] = 'd'
+
+    for (who, target, event) in events:
+        act, first, hops = event
+        if trace: print(who, target, *event, sep=' ')
+        if who not in nodes: continue
+        if first == None:
+            change_entry(who, target, act)
+        else:
+            change_route(who, target, event)
+        yield rtabs
+
+def show_routes (rtabs):
+    nids = list(rtabs)
+    nids.sort()
+    for nid in nids:
+        node = rtabs.get(nid, None)
+        print("Node {0}".format(nid))
+        eids = list(node)
+        eids.sort()
+        for eid in eids:
+            print("  To {0}:".format(eid),
+                  *node[eid].iteritems())
+
+def main (argv=None):
+    if not argv: argv = sys.argv
+
+    try:
+        assert len(argv) > 2, 'missing params'
+        f = open(argv[1])
+        n = map(int, argv[2:])
+    except Exception as E:
+        from os.path import basename
+        print("Error: {0}".format(E),
+              __doc__.format(prog=basename(argv[0])),
+              sep='\n\n', file=sys.stderr)
+        sys.exit(1)
+
+    evs = parse(f)
+    history = route_history(evs, *n)
+    for rtabs in history:
+        show_routes(rtabs)
+        print('-' * 80)
+    f.close()
+
+    return 0
+
+if __name__ == '__main__':
+    sys.exit(main())
