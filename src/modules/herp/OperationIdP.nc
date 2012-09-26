@@ -56,7 +56,9 @@ implementation {
         uint16_t p, n;
 
         if (!available) {
+#ifdef DUMP
             dbg("OpId", "!!! Out of opids !!!");
+#endif
             return EBUSY;
         }
 
@@ -70,7 +72,9 @@ implementation {
         *Id = first_free;
         first_free = n;
 
+#ifdef DUMP
         dbg("OpId", "%d in use\n", *Id);
+#endif
 
         return SUCCESS;
     }
@@ -78,7 +82,9 @@ implementation {
     command error_t OperationId.put (herp_opid_t Id) {
         if (Id >= SIZE) return EINVAL;
         if (call Free.get(Id)) {
+#ifdef DUMP
             dbg("OpId", "Double free!\n");
+#endif
             return EALREADY;
         }
 
@@ -95,7 +101,9 @@ implementation {
         first_free = Id;
         available ++;
 
+#ifdef DUMP
         dbg("OpId", "%d free!\n", Id);
+#endif
 
         return SUCCESS;
     }
