@@ -142,12 +142,19 @@ static void add_channels (Tossim &tossim, LogFiles &log)
 
 int main (int argc, char **argv)
 {
+    if (argc < 2) {
+        std::cerr << "Requiring topology file!" << std::endl
+                  << "Usage: " << argv[0] << " <topology-file>"
+                  << std::endl;
+        return 1;
+    }
+
     terminated = false;
     signal(SIGINT, set_terminated);
     signal(SIGTERM, set_terminated);
 
     Tossim tossim(NULL);
-    Topology topo(tossim, "topology");
+    Topology topo(tossim, argv[1]);
     LogFiles log;
 
     add_channels(tossim, log);
