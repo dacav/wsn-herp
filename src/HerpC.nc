@@ -22,8 +22,15 @@ typedef nx_struct {
 #define MIN_TIME 512
 #define MAX_TIME (512 + 1024)
 
-#define N_NODES 10
-#define BUDGET 10
+#ifndef N_NODES
+#   warning Number of node (N_NODES) not defined. Defaulting to 10
+#   define N_NODES 10
+#endif
+
+#ifndef BUDGET
+#   warning Budget constant (BUDGET) not defined. Defaulting to 10
+#   define BUDGET 10
+#endif
 
 module HerpC {
 
